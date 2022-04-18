@@ -13,6 +13,8 @@ class CardboardBot {
 
   CardboardBot._();
 
+  static const int intents = GatewayIntents.guildMessages | GatewayIntents.directMessages;
+
   static Future<void> boot({
     required INyxxWebsocket bot,
     required IInteractions interactions,

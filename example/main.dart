@@ -23,7 +23,7 @@ Future<void> initialize() async {
 
   INyxxWebsocket bot = NyxxFactory.createNyxxWebsocket(
     r"$DISCORD_TOKEN",
-    GatewayIntents.guildMessages | GatewayIntents.directMessages | GatewayIntents.allUnprivileged,
+    CardboardBot.intents,
   )
     ..registerPlugin(IgnoreExceptions())
     ..registerPlugin(CliIntegration());

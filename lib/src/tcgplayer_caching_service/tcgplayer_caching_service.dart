@@ -193,14 +193,18 @@ class TcgPlayerCachingService {
     }
 
     // Run Now
+    var productRefreshFuture = Future.value(_productCache);
     if (DateTime.now().toUtc().isAfter(_productCache.timestamp.add(Duration(hours: 12)))) {
-      await refreshProductFunc();
+      productRefreshFuture = refreshProductFunc();
     }
-    if (_skuPriceCacheById.isEmpty ||
-        _skuPriceCacheById.values.any((skuPriceCache) => skuPriceCache.timestamp.add(_priceCacheMaxAge).isBefore(DateTime.now()))) {
-      await refreshPriceFunc();
-    }
-    await refreshHighPriorityPriceFunc();
+
+    productRefreshFuture.then((value) {
+      if (_skuPriceCacheById.isEmpty ||
+          _skuPriceCacheById.values.any((skuPriceCache) => skuPriceCache.timestamp.add(_priceCacheMaxAge).isBefore(DateTime.now()))) {
+        refreshPriceFunc();
+      }
+      refreshHighPriorityPriceFunc();
+    });
 
     // Run Timers
     _refreshProductCacheTimer?.cancel();
@@ -214,13 +218,13 @@ class TcgPlayerCachingService {
   void _writeProductCacheToStorage(ProductCache productCache) {
     var file = File(_productCachePath);
     file.createSync(recursive: true);
-    file.writeAsBytes(gzip.encode(utf8.encode(_jsonEncoder.convert(_productCache))));
+    file.writeAsBytesSync(gzip.encode(utf8.encode(_jsonEncoder.convert(_productCache))));
   }
 
   void _writePriceCacheToStorage(List<SkuPriceCache> skuPriceCacheList) {
     var file = File(_priceCachePath);
     file.createSync(recursive: true);
-    file.writeAsBytes(gzip.encode(utf8.encode(_jsonEncoder.convert(_skuPriceCacheById.values.toList()))));
+    file.writeAsBytesSync(gzip.encode(utf8.encode(_jsonEncoder.convert(_skuPriceCacheById.values.toList()))));
   }
 
   Future<ProductCache> _readProductCacheFromStorage() async {

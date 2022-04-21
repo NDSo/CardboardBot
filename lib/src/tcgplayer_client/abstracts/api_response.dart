@@ -52,6 +52,7 @@ class ApiPagedResponse<Result extends ApiResult> extends ApiBaseResponse with Re
   @override
   List<Result> results;
   @override
+  @JsonKey(defaultValue: 0) // NULL ON ERROR OF "NO RESULTS FOUND"...
   int totalItems;
 
   ApiPagedResponse({

@@ -57,7 +57,11 @@ class TcgPlayerClient extends IOClient {
 
   Future<Map<String, String>> _getRequestHeaders() async {
     await _refreshBearerToken();
-    return {"Accept": "application/json", "Authorization": "bearer ${_bearerToken!.value}", "User-Agent": "CardboardBot/0.1.0"};
+    return {
+      "Accept": "application/json",
+      "Authorization": "bearer ${_bearerToken!.value}",
+      "User-Agent": "CardboardBot/0.1.0",
+    };
   }
 
   final Queue<Completer<dynamic>> _taskQueue = Queue<Completer<dynamic>>();
@@ -136,6 +140,7 @@ class TcgPlayerClient extends IOClient {
 
 class _BearerToken {
   final String _value;
+
   // ignore: unused_field
   final DateTime _issued;
   final DateTime _expires;

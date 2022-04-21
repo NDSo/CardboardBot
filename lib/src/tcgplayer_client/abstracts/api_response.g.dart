@@ -36,7 +36,7 @@ ApiPagedResponse<Result> _$ApiPagedResponseFromJson<Result extends ApiResult>(
       errors:
           (json['errors'] as List<dynamic>).map((e) => e as String).toList(),
       results: (json['results'] as List<dynamic>).map(fromJsonResult).toList(),
-      totalItems: json['totalItems'] as int,
+      totalItems: json['totalItems'] as int? ?? 0,
     );
 
 Map<String, dynamic> _$ApiPagedResponseToJson<Result extends ApiResult>(

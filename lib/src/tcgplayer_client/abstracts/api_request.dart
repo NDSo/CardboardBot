@@ -20,7 +20,8 @@ abstract class ApiRequest<T extends ApiBaseResponse> {
 
   Map<String, dynamic>? toJson();
 
-  Map<String, String>? getQueryParameters() => toJson()?.map((key, value) => MapEntry<String, String>(key, value.toString()));
+  Map<String, String>? getQueryParameters() =>
+      (toJson()?..removeWhere((key, value) => value == null))?.map((key, value) => MapEntry<String, String>(key, value.toString()));
 
   List<String> getPathSegments();
 

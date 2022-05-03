@@ -23,6 +23,6 @@ extension StringExtension on String {
   }
 
   String substringSafe(int start, [int? end]) {
-    return substring(start, min(length - 1, end ?? (length - 1)));
+    return substring(start, min(length, end ?? length));
   }
 }

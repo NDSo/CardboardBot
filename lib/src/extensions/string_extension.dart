@@ -4,6 +4,7 @@ import 'dart:math';
 
 extension StringExtension on String {
   int toInt() => int.parse(this);
+
   int? tryToInt({int? orElse}) => int.tryParse(this) ?? orElse;
 
   String toTitleCase() {
@@ -22,6 +23,6 @@ extension StringExtension on String {
   }
 
   String substringSafe(int start, [int? end]) {
-    return substring(start, min(length, end ?? length));
+    return substring(start, min(length - 1, end ?? (length - 1)));
   }
 }

@@ -6,7 +6,8 @@ part of 'product_cache.dart';
 // JsonSerializableGenerator
 // **************************************************************************
 
-ProductCache _$ProductCacheFromJson(Map<String, dynamic> json) => ProductCache(
+ProductCache _$ProductCacheFromJson(Map<String, dynamic> json) =>
+    ProductCache._(
       timestamp: DateTime.parse(json['timestamp'] as String),
       categoryList: (json['categoryList'] as List<dynamic>)
           .map((e) => Category.fromJson(e as Map<String, dynamic>))

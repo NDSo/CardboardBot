@@ -40,10 +40,9 @@ class TcgPlayerCachingService {
   final JsonEncoder _jsonEncoder = JsonEncoder();
   static const String _productCachePath = 'stores/tcgplayer/product_cache.gzip';
   static const String _priceCachePath = 'stores/tcgplayer/price_cache.gzip';
-  static const Duration _priceCacheMaxAge = Duration(hours: 6);
+  static const Duration _priceCacheMaxAge = Duration(hours: 1);
 
   Timer? _refreshProductCacheTimer;
-  Timer? _refreshPriceCacheTimer;
   Timer? _writeToStorageTimer;
 
   ProductCache _productCache = ProductCache.empty();
@@ -184,10 +183,6 @@ class TcgPlayerCachingService {
       return await _refreshProductCache();
     }
 
-    refreshPriceFunc() async {
-      return await _refreshSkuPriceCache(skuIds: _productCache.productList.expand((product) => product.skus.map((sku) => sku.skuId)).toList());
-    }
-
     refreshHighPriorityPriceFunc() async {
       return await _refreshSkuPriceCache(skuIds: _highPrioritySkuIds.toList());
     }
@@ -199,20 +194,14 @@ class TcgPlayerCachingService {
     }
 
     productRefreshFuture.then((value) {
-      if (_skuPriceCacheById.isEmpty ||
-          _skuPriceCacheById.values.any((skuPriceCache) => skuPriceCache.timestamp.add(_priceCacheMaxAge).isBefore(DateTime.now()))) {
-        refreshPriceFunc();
-      }
       refreshHighPriorityPriceFunc();
     });
 
     // Run Timers
     _refreshProductCacheTimer?.cancel();
     _refreshProductCacheTimer = Timer.periodic(Duration(hours: 12), (timer) => refreshProductFunc());
-    _refreshPriceCacheTimer?.cancel();
-    _refreshPriceCacheTimer = Timer.periodic(Duration(hours: 6), (timer) => refreshPriceFunc());
     _refreshHighPriorityPriceCacheTimer?.cancel();
-    _refreshHighPriorityPriceCacheTimer = Timer.periodic(Duration(minutes: 3), (timer) => refreshHighPriorityPriceFunc());
+    _refreshHighPriorityPriceCacheTimer = Timer.periodic(Duration(minutes: 5), (timer) => refreshHighPriorityPriceFunc());
   }
 
   void _writeProductCacheToStorage(ProductCache productCache) {
@@ -245,6 +234,7 @@ class TcgPlayerCachingService {
   }
 
   Future<ProductCache> _refreshProductCache() async {
+    DateTime start = DateTime.now();
     var completer = Completer<ProductCache>();
     _futureProductCache = completer.future;
     List<Category> categoryList = await _getApiCategories(inclusionRules);
@@ -252,18 +242,29 @@ class TcgPlayerCachingService {
     Map<int, List<Condition>> conditionsByCategoryId = await _getApiCategoryConditions(categoryList);
     Map<int, List<Printing>> printingsByCategoryId = await _getApiCategoryPrintings(categoryList);
     Map<int, List<Rarity>> raritiesByCategoryId = await _getApiCategoryRarities(categoryList);
-    List<ProductExtended> productList = await _getApiProductExtended(categoryList, groupList);
 
-    _productCache = ProductCache(
+    // Only query products for new (to me) groups or recent groups
+    DateTime cutoff = DateTime.now().subtract(Duration(days: 365));
+    List<Group> recentOrNewGroupList = groupList //
+        .where((group) => group.publishedOn.isAfter(cutoff) || !_productCache.groupById.keys.contains(group.groupId))
+        .toList();
+
+    List<ProductExtended> recentProductList = await _getApiProductExtended(categoryList, recentOrNewGroupList);
+
+    _productCache = ProductCache.merge(
+      _productCache,
       timestamp: DateTime.now().toUtc(),
       categoryList: categoryList,
+      groupList: groupList,
       conditionsByCategoryId: conditionsByCategoryId,
       printingsByCategoryId: printingsByCategoryId,
       raritiesByCategoryId: raritiesByCategoryId,
-      groupList: groupList,
-      productList: productList,
+      recentProductList: recentProductList,
     );
     completer.complete(_productCache);
+
+    DateTime end = DateTime.now();
+    _logger.info("_refreshProductCache Time: ${end.difference(start).inSeconds}s | Recent Group Count: ${recentOrNewGroupList.length} | Recent Product Count: ${recentProductList.length}");
 
     return _productCache;
   }

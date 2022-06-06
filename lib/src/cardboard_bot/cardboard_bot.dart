@@ -2,6 +2,7 @@ import 'package:cardboard_bot/extensions.dart';
 import 'package:cardboard_bot/tcgplayer_caching_service.dart';
 import 'package:nyxx/nyxx.dart';
 import 'package:nyxx_interactions/nyxx_interactions.dart';
+import 'package:logging/logging.dart';
 
 import 'actions/tcgplayer_alert_action_service.dart';
 import 'commands/tcgplayer_alert_command.dart';
@@ -10,10 +11,11 @@ import 'commands/tcgplayer_search_command.dart';
 import 'config/constants.dart';
 
 class CardboardBot {
+  static final Logger _logger = Logger("$CardboardBot");
 
   CardboardBot._();
 
-  static const int intents = GatewayIntents.guildMessages | GatewayIntents.directMessages;
+  static const int intents = GatewayIntents.guildMessages | GatewayIntents.directMessages | GatewayIntents.messageContent;
 
   static Future<void> boot({
     required INyxxWebsocket bot,
@@ -37,7 +39,7 @@ class CardboardBot {
   }
 
   static void _replaceTcgPlayerEmbeds(INyxxWebsocket bot, TcgPlayerCachingService tcgPlayerService) {
-    RegExp regExp = RegExp(r"tcgplayer.com\/product\/(\d+)", caseSensitive: false);
+    RegExp regExp = RegExp(r"tcgplayer.com/product/(\d+)", caseSensitive: false);
     bot.eventsWs.onMessageReceived.listen((event) async {
       Match? match = regExp.firstMatch(event.message.content);
       if (match?.group(1) != null) {

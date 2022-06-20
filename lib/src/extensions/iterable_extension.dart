@@ -55,7 +55,7 @@ extension SmartIterable<E> on Iterable<E> {
     return thisList;
   }
 
-  List<E> prependedBy(Iterable<E> other) {
+  Iterable<E> prependedBy(Iterable<E> other) {
     return [
       ...other,
       ...this,

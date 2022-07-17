@@ -1,0 +1,6 @@
+discordBot:
+  token: #required_token_here
+
+tcgPlayerApi:
+  publicKey: #required_token_here
+  privateKey: #required_token_here

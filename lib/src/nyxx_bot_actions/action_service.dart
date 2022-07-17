@@ -81,12 +81,12 @@ abstract class ActionService<A extends Action> {
   }
 
   Future<void> _persistToStorage() async {
-    var file = await File('stores/actions/${getFileName()}.json').create(recursive: true);
+    var file = await File('data/actions/${getFileName()}.json').create(recursive: true);
     await file.writeAsString(_encode(_actionStoreCache));
   }
 
   Future<void> _loadFromStorage() async {
-    var file = File('stores/actions/${getFileName()}.json');
+    var file = File('data/actions/${getFileName()}.json');
     if (await file.exists()) {
       _actionStoreCache = _decode(await file.readAsString());
     } else {

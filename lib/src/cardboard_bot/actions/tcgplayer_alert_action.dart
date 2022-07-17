@@ -39,8 +39,8 @@ class TcgPlayerAlertAction extends Action {
     )
         .where(
           (skuPriceChange) =>
-      ((skuPriceChange.after.skuPrice.lowPrice ?? double.infinity) < (skuPriceChange.before?.skuPrice.lowPrice ?? double.infinity)) &&
-          ((skuPriceChange.after.skuPrice.lowPrice ?? double.infinity) < (maxPrice ?? double.infinity)),
+      ((skuPriceChange.after.skuPrice.lowestListingPrice ?? double.infinity) < (skuPriceChange.before?.skuPrice.lowestListingPrice ?? double.infinity)) &&
+          ((skuPriceChange.after.skuPrice.lowestListingPrice ?? double.infinity) <= (maxPrice ?? double.infinity)),
     )
         .listen(
           (skuPriceChange) async =>

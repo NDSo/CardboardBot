@@ -44,22 +44,22 @@ Future<void> initialize() async {
   // Setup CardboardBot
   //////////////////////////
 
-  //TODO: Refactor the service/caching service initialization, preferably pass it into CardboardBot
-
   initializeTcgPlayerClient(
     publicKey: CardboardBotConfigYaml.tcgPlayerApiConfig.publicKey,
     privateKey: CardboardBotConfigYaml.tcgPlayerApiConfig.privateKey,
   );
 
+  TcgPlayerCachingService tcgPlayerService = await TcgPlayerCachingService.initialize([
+    InclusionRule(categoryMatch: RegExp("pokemon", caseSensitive: false)),
+    InclusionRule(categoryMatch: RegExp("flesh and blood", caseSensitive: false)),
+    InclusionRule(categoryMatch: RegExp("final fantasy", caseSensitive: false)),
+    InclusionRule(categoryMatch: RegExp("weiss schwarz", caseSensitive: false)),
+  ]);
+
   await CardboardBot.boot(
     bot: bot,
     interactions: interactions,
-    tcgplayerInclusionRules: [
-      InclusionRule(categoryMatch: RegExp("pokemon", caseSensitive: false)),
-      InclusionRule(categoryMatch: RegExp("flesh and blood", caseSensitive: false)),
-      InclusionRule(categoryMatch: RegExp("final fantasy", caseSensitive: false)),
-      InclusionRule(categoryMatch: RegExp("weiss schwarz", caseSensitive: false)),
-    ],
+    tcgPlayerService: tcgPlayerService,
   );
 
   /////////////////////////////
@@ -90,8 +90,8 @@ class NyxxConfig {
   final String token;
 
   NyxxConfig(
-      this.token,
-      );
+    this.token,
+  );
 
   factory NyxxConfig.fromYaml(YamlDocument yaml) {
     dynamic node = yaml.contents.value["discordBot"];
@@ -106,9 +106,9 @@ class TcgPlayerApiConfig {
   final String privateKey;
 
   TcgPlayerApiConfig(
-      this.publicKey,
-      this.privateKey,
-      );
+    this.publicKey,
+    this.privateKey,
+  );
 
   factory TcgPlayerApiConfig.fromYaml(YamlDocument yaml) {
     dynamic node = yaml.contents.value["tcgPlayerApi"];

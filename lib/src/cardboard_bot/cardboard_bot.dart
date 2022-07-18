@@ -20,9 +20,8 @@ class CardboardBot {
   static Future<void> boot({
     required INyxxWebsocket bot,
     required IInteractions interactions,
-    required List<InclusionRule> tcgplayerInclusionRules,
+    required TcgPlayerCachingService tcgPlayerService,
   }) async {
-    TcgPlayerCachingService tcgPlayerService = await TcgPlayerCachingService.initialize(tcgplayerInclusionRules);
     TcgPlayerAlertActionService tcgPlayerAlertActionService = TcgPlayerAlertActionService(bot, tcgPlayerService)..boot();
 
     _replaceTcgPlayerEmbeds(bot, tcgPlayerService);

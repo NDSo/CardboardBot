@@ -2,9 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:cardboard_bot/extensions.dart';
 import 'package:cardboard_bot/tcgplayer_client.dart';
 import 'package:logging/logging.dart';
-import 'package:cardboard_bot/extensions.dart';
 
 import 'models/inclusion_rule.dart';
 import 'models/product_cache.dart';
@@ -51,20 +51,12 @@ class TcgPlayerCachingService {
   final Map<int, Future<SkuPriceCache>> _futureSkuPriceCacheById = {};
 
   // SkuPrice Change Logic
-  Timer? _refreshHighPriorityPriceCacheTimer;
-
-  final Set<int> _highPrioritySkuIds = {};
-
-  void registerHighPrioritySkuId(int skuId) => _highPrioritySkuIds.add(skuId);
-
-  void unregisterHighPrioritySkuId(int skuId) => _highPrioritySkuIds.remove(skuId);
-
-  final StreamController<Map<int, SkuPriceCacheChange>> _highPrioritySkuPriceCacheChangeController = StreamController.broadcast();
+  final StreamController<Map<int, SkuPriceCacheChange>> _skuPriceCacheChangeController = StreamController.broadcast();
 
   // USER LEVEL QUERY FUNCTIONS
   DateTime get productCacheTimestamp => _productCache.timestamp;
 
-  Stream<Map<int, SkuPriceCacheChange>> get onHighPrioritySkuPriceCacheChange => _highPrioritySkuPriceCacheChangeController.stream;
+  Stream<Map<int, SkuPriceCacheChange>> get onSkuPriceCacheChange => _skuPriceCacheChangeController.stream;
 
   Future<ProductCache> get freshProductCache => _futureProductCache ?? Future.value(_productCache);
 
@@ -183,25 +175,14 @@ class TcgPlayerCachingService {
       return await _refreshProductCache();
     }
 
-    refreshHighPriorityPriceFunc() async {
-      return await _refreshSkuPriceCache(skuIds: _highPrioritySkuIds.toList());
-    }
-
     // Run Now
-    var productRefreshFuture = Future.value(_productCache);
     if (DateTime.now().toUtc().isAfter(_productCache.timestamp.add(Duration(hours: 12)))) {
-      productRefreshFuture = refreshProductFunc();
+      refreshProductFunc();
     }
-
-    productRefreshFuture.then((value) {
-      refreshHighPriorityPriceFunc();
-    });
 
     // Run Timers
     _refreshProductCacheTimer?.cancel();
     _refreshProductCacheTimer = Timer.periodic(Duration(hours: 12), (timer) => refreshProductFunc());
-    _refreshHighPriorityPriceCacheTimer?.cancel();
-    _refreshHighPriorityPriceCacheTimer = Timer.periodic(Duration(minutes: 5), (timer) => refreshHighPriorityPriceFunc());
   }
 
   void _writeProductCacheToStorage(ProductCache productCache) {
@@ -282,17 +263,15 @@ class TcgPlayerCachingService {
 
     for (var skuPriceCacheFuture in skuPriceCacheFutureById.values) {
       skuPriceCacheFuture.then((skuPriceCache) {
-        if (_highPrioritySkuIds.contains(skuPriceCache.skuPrice.skuId)) {
           skuPriceCacheChangeById[skuPriceCache.skuPrice.skuId] =
               SkuPriceCacheChange(before: _skuPriceCacheById[skuPriceCache.skuPrice.skuId], after: skuPriceCache);
-        }
         skuPriceCacheById[skuPriceCache.skuPrice.skuId] = skuPriceCache;
         _skuPriceCacheById[skuPriceCache.skuPrice.skuId] = skuPriceCache;
       });
     }
 
     await Future.wait(skuPriceCacheFutureById.values);
-    _highPrioritySkuPriceCacheChangeController.add(skuPriceCacheChangeById);
+    _skuPriceCacheChangeController.add(skuPriceCacheChangeById);
 
     return skuPriceCacheById;
   }

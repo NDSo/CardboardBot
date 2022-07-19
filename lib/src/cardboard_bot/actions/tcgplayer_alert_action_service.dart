@@ -94,7 +94,7 @@ class TcgPlayerAlertActionService extends ActionService<TcgPlayerAlertAction> {
       ..fields = [
         EmbedFieldBuilder(
           "Lowest Listing",
-          "${skuPriceChange.after.skuPrice.lowPrice?.toFormat(usdFormat)}\n${MessageDecoration.strike.format("${skuPriceChange.before?.skuPrice.lowPrice?.toFormat(usdFormat)}")}",
+          "${skuPriceChange.after.skuPrice.lowestListingPrice?.toFormat(usdFormat)}\n${MessageDecoration.strike.format("${skuPriceChange.before?.skuPrice.lowestListingPrice?.toFormat(usdFormat)}")}",
           true,
         ),
         EmbedFieldBuilder(

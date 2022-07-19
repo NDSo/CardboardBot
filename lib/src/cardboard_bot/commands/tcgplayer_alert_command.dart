@@ -136,7 +136,10 @@ class TcgPlayerAlertCommand extends CommandOptionBuilder {
                 Sku sku = product.skus.firstWhere((element) => element.skuId == action.skuId);
                 Printing printing = tcgPlayerService.searchPrintings(categoryId: product.categoryId, printingId: sku.printingId).first;
                 Condition condition = tcgPlayerService.searchConditions(categoryId: product.categoryId, conditionId: sku.conditionId).first;
-                return ArgChoiceBuilder("${product.name} | ${printing.name} | ${condition.name}".substringSafe(0, 100), action.getId());
+                return ArgChoiceBuilder(
+                    "${product.name} | ${printing.name} | ${condition.name}${action.maxPrice == null ? "" : " | ${action.maxPrice?.toFormat(usdFormat)}"}"
+                        .substringSafe(0, 100),
+                    action.getId());
               })
               .toList()
               .sorted((a, b) => a.name.compareTo(b.name))

@@ -5,12 +5,15 @@ import 'dart:math';
 import 'package:cardboard_bot/extensions.dart';
 import 'package:cardboard_bot/nyxx_bot_actions.dart';
 import 'package:cardboard_bot/tcgplayer_caching_service.dart';
+import 'package:logging/logging.dart';
 import 'package:nyxx/nyxx.dart';
 
 import '../config/constants.dart';
 import 'tcgplayer_alert_action.dart';
 
 class TcgPlayerAlertActionService extends ActionService<TcgPlayerAlertAction> {
+  // ignore: unused_field
+  static final Logger _logger = Logger("$TcgPlayerAlertActionService");
   final TcgPlayerCachingService _tcgPlayerService;
   Timer? _timer;
   StreamSubscription<Map<int, SkuPriceCacheChange>>? _changeSubscription;
@@ -33,14 +36,13 @@ class TcgPlayerAlertActionService extends ActionService<TcgPlayerAlertAction> {
     if (intendedLatency.isNegative) intendedLatency = Duration.zero;
 
     _timer = Timer(intendedLatency, () async {
-      Duration latency = Duration.zero;
+      var stopwatch = Stopwatch()..start();
       try {
-        DateTime start = DateTime.now();
-        await _tcgPlayerService.getSkuPriceCache(skuIds: _skuIdSet.getNextSkuIds(count: 250).toList(), maxAge: desiredMaxAge);
-        DateTime end = DateTime.now();
-        latency = end.difference(start);
+        var skuIds = _skuIdSet.getNextSkuIds(count: 250).toList();
+        await _tcgPlayerService.getSkuPriceCache(skuIds: skuIds, maxAge: desiredMaxAge ~/ 2);
       } finally {
-        setupTimerLoop(latency);
+        stopwatch.stop();
+        setupTimerLoop(stopwatch.elapsed);
       }
     });
   }
@@ -75,14 +77,15 @@ class TcgPlayerAlertActionService extends ActionService<TcgPlayerAlertAction> {
     });
   }
 
-  EmbedBuilder _buildProductEmbed({required ProductWrapper product, required SkuPriceCacheChange skuPriceChange, required num? maxPrice, required DiscordColor? botColor}) {
+  EmbedBuilder _buildProductEmbed(
+      {required ProductWrapper product, required SkuPriceCacheChange skuPriceChange, required num? maxPrice, required DiscordColor? botColor}) {
     SkuWrapper sku = product.skus.firstWhere((element) => element.skuId == skuPriceChange.after.skuPrice.skuId);
 
     EmbedBuilder embedBuilder = EmbedBuilder()
       ..color = botColor
       ..addAuthor((author) {
         author.name =
-        "${product.group.name}${product.extendedData.where((element) => RegExp("number", caseSensitive: false).hasMatch(element.name)).map((e) => " | ${e.value}").tryFirst(orElse: "")}";
+            "${product.group.name}${product.extendedData.where((element) => RegExp("number", caseSensitive: false).hasMatch(element.name)).map((e) => " | ${e.value}").tryFirst(orElse: "")}";
       })
       ..title = "${product.name}"
       ..url = product.url.toDiscordString()
@@ -162,7 +165,7 @@ class _SkuIdQueue {
     _alertActionBySkuId.update(
       action.skuId,
       (value) => value..add(action),
-      ifAbsent: () => {},
+      ifAbsent: () => {action},
     );
     _skuIdSet.add(action.skuId);
   }

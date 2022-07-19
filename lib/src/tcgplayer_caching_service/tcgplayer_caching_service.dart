@@ -245,34 +245,44 @@ class TcgPlayerCachingService {
     completer.complete(_productCache);
 
     DateTime end = DateTime.now();
-    _logger.info("_refreshProductCache Time: ${end.difference(start).inSeconds}s | Recent Group Count: ${recentOrNewGroupList.length} | Recent Product Count: ${recentProductList.length}");
+    _logger.info(
+        "_refreshProductCache Time: ${end.difference(start).inSeconds}s | Recent Group Count: ${recentOrNewGroupList.length} | Recent Product Count: ${recentProductList.length}");
 
     return _productCache;
   }
 
   Future<Map<int, SkuPriceCache>> _refreshSkuPriceCache({required List<int> skuIds}) async {
     if (skuIds.isEmpty) return {};
-    Map<int, Future<SkuPrice>> skuPriceFutureById = _getApiSkuPrices(skuIds);
-    Map<int, Future<SkuPriceCache>> skuPriceCacheFutureById =
-        skuPriceFutureById.map((key, value) => MapEntry(key, value.then((skuPrice) => SkuPriceCache(timestamp: DateTime.now(), skuPrice: skuPrice))));
 
+    // Get Future SkuPriceCache Map
+    Map<int, Future<SkuPriceCache>> skuPriceCacheFutureById = _getApiSkuPrices(skuIds).map(
+      (key, value) => MapEntry(
+        key,
+        value.then(
+          (skuPrice) => SkuPriceCache(timestamp: DateTime.now(), skuPrice: skuPrice),
+        ),
+      ),
+    );
+
+    // Add in flight request to Future cache, and remove them when they complete
     _futureSkuPriceCacheById.addAll(skuPriceCacheFutureById);
+    for (var entry in skuPriceCacheFutureById.entries) {
+      entry.value.whenComplete(() => _futureSkuPriceCacheById.remove(entry.key));
+    }
+
 
     Map<int, SkuPriceCacheChange> skuPriceCacheChangeById = {};
     Map<int, SkuPriceCache> skuPriceCacheById = {};
 
-    for (var skuPriceCacheFuture in skuPriceCacheFutureById.values) {
-      skuPriceCacheFuture.then((skuPriceCache) {
-          skuPriceCacheChangeById[skuPriceCache.skuPrice.skuId] =
-              SkuPriceCacheChange(before: _skuPriceCacheById[skuPriceCache.skuPrice.skuId], after: skuPriceCache);
-        skuPriceCacheById[skuPriceCache.skuPrice.skuId] = skuPriceCache;
-        _skuPriceCacheById[skuPriceCache.skuPrice.skuId] = skuPriceCache;
-      });
+    for (var skuPriceCache in await Future.wait(skuPriceCacheFutureById.values)) {
+      skuPriceCacheChangeById[skuPriceCache.skuPrice.skuId] =
+          SkuPriceCacheChange(before: _skuPriceCacheById[skuPriceCache.skuPrice.skuId], after: skuPriceCache);
+      skuPriceCacheById[skuPriceCache.skuPrice.skuId] = skuPriceCache;
     }
 
-    await Future.wait(skuPriceCacheFutureById.values);
     _skuPriceCacheChangeController.add(skuPriceCacheChangeById);
 
+    _skuPriceCacheById.addAll(skuPriceCacheById);
     return skuPriceCacheById;
   }
 

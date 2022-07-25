@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:cardboard_bot/extensions.dart';
+import 'package:cardboard_bot/src/google_cloud_services/google_cloud_service.dart';
 import 'package:cardboard_bot/tcgplayer_client.dart';
 import 'package:logging/logging.dart';
 
@@ -156,14 +157,13 @@ class TcgPlayerCachingService {
     await _readPriceCacheFromStorage();
     await _setupRefresh();
 
-    void writeToStorage() {
-      _writeProductCacheToStorage(_productCache);
-      _writePriceCacheToStorage(_skuPriceCacheById.values.toList());
+    Future<void> writeToStorage() async {
+      await _writePriceCacheToStorage(_skuPriceCacheById.values.toList());
     }
 
     ProcessSignal processSignal = !Platform.isWindows ? ProcessSignal.sigterm : ProcessSignal.sigint;
-    processSignal.watch().listen((event) {
-      writeToStorage();
+    processSignal.watch().listen((event) async {
+      await writeToStorage();
     });
     _writeToStorageTimer ??= Timer.periodic(Duration(hours: 6), (timer) {
       writeToStorage();
@@ -172,7 +172,9 @@ class TcgPlayerCachingService {
 
   Future<void> _setupRefresh() async {
     refreshProductFunc() async {
-      return await _refreshProductCache();
+      await _refreshProductCache();
+      await _writeProductCacheToStorage(_productCache);
+      return;
     }
 
     // Run Now
@@ -185,32 +187,39 @@ class TcgPlayerCachingService {
     _refreshProductCacheTimer = Timer.periodic(Duration(hours: 12), (timer) => refreshProductFunc());
   }
 
-  void _writeProductCacheToStorage(ProductCache productCache) {
-    var file = File(_productCachePath);
-    file.createSync(recursive: true);
-    file.writeAsBytesSync(gzip.encode(utf8.encode(_jsonEncoder.convert(_productCache))));
+  Future<void> _writeProductCacheToStorage(ProductCache productCache) async {
+    // var file = File(_productCachePath);
+    // file.createSync(recursive: true);
+    // file.writeAsBytesSync(gzip.encode(utf8.encode(_jsonEncoder.convert(_productCache))));
+    GoogleCloudService().write(object: productCache, name: "TcgPlayerProductCache", zip: true);
   }
 
-  void _writePriceCacheToStorage(List<SkuPriceCache> skuPriceCacheList) {
-    var file = File(_priceCachePath);
-    file.createSync(recursive: true);
-    file.writeAsBytesSync(gzip.encode(utf8.encode(_jsonEncoder.convert(_skuPriceCacheById.values.toList()))));
+  Future<void> _writePriceCacheToStorage(List<SkuPriceCache> skuPriceCacheList) async {
+    // var file = File(_priceCachePath);
+    // file.createSync(recursive: true);
+    // file.writeAsBytesSync(gzip.encode(utf8.encode(_jsonEncoder.convert(_skuPriceCacheById.values.toList()))));
+    GoogleCloudService().write(object: skuPriceCacheList, name: "TcgPlayerPriceCache", zip: true);
   }
 
   Future<ProductCache> _readProductCacheFromStorage() async {
-    var file = File(_productCachePath);
-    if (file.existsSync()) {
-      _productCache = ProductCache.fromJson(jsonDecode(utf8.decode(gzip.decode(await file.readAsBytes()))));
-    }
+    // var file = File(_productCachePath);
+    // if (file.existsSync()) {
+    //   _productCache = ProductCache.fromJson(jsonDecode(utf8.decode(gzip.decode(await file.readAsBytes()))));
+    // }
+    // return _productCache;
+    _productCache = await GoogleCloudService().read<ProductCache>(fromJson: (json) => ProductCache.fromJson(json), name: "TcgPlayerProductCache", zip: true) ?? _productCache;
     return _productCache;
   }
 
   Future<Map<int, SkuPriceCache>> _readPriceCacheFromStorage() async {
-    var file = File(_priceCachePath);
-    if (file.existsSync()) {
-      var skuPriceCacheList = (jsonDecode(utf8.decode(gzip.decode(await file.readAsBytes()))) as List).map((e) => SkuPriceCache.fromJson(e)).toList();
-      _skuPriceCacheById = Map.fromIterables(skuPriceCacheList.map((e) => e.skuPrice.skuId), skuPriceCacheList);
-    }
+    // var file = File(_priceCachePath);
+    // if (file.existsSync()) {
+    //   var skuPriceCacheList = (jsonDecode(utf8.decode(gzip.decode(await file.readAsBytes()))) as List).map((e) => SkuPriceCache.fromJson(e)).toList();
+    //   _skuPriceCacheById = Map.fromIterables(skuPriceCacheList.map((e) => e.skuPrice.skuId), skuPriceCacheList);
+    // }
+    // return _skuPriceCacheById;
+    var skuPriceCacheList = await GoogleCloudService().readList<SkuPriceCache>(fromJson: (json) => SkuPriceCache.fromJson(json), name: "TcgPlayerSkuPriceCache", zip: true);
+    if (skuPriceCacheList != null) _skuPriceCacheById = Map.fromIterables(skuPriceCacheList.map((e) => e.skuPrice.skuId), skuPriceCacheList);
     return _skuPriceCacheById;
   }
 
@@ -269,7 +278,6 @@ class TcgPlayerCachingService {
     for (var entry in skuPriceCacheFutureById.entries) {
       entry.value.whenComplete(() => _futureSkuPriceCacheById.remove(entry.key));
     }
-
 
     Map<int, SkuPriceCacheChange> skuPriceCacheChangeById = {};
     Map<int, SkuPriceCache> skuPriceCacheById = {};

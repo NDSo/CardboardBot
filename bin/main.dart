@@ -1,8 +1,10 @@
 import 'dart:io';
 
 import 'package:cardboard_bot/cardboard_bot.dart';
+import 'package:cardboard_bot/src/google_cloud_services/google_cloud_service.dart';
 import 'package:cardboard_bot/tcgplayer_caching_service.dart';
 import 'package:cardboard_bot/tcgplayer_client.dart';
+import 'package:googleapis/compute/v1.dart' as gce;
 import 'package:logging/logging.dart';
 import 'package:nyxx/nyxx.dart';
 import 'package:nyxx_interactions/nyxx_interactions.dart';
@@ -17,19 +19,56 @@ void main() async {
     if (rec.stackTrace != null && (rec.level == Level.SEVERE || rec.level == Level.SHOUT)) print("${rec.stackTrace?.toString()}");
   });
 
-  initialize();
+  // TODO: make enableGoogleCloud a cli argument
+  await initialize(enableGoogleCloud: true);
 }
 
-Future<void> initialize() async {
+Future<void> initialize({required bool enableGoogleCloud}) async {
   // ignore: unused_local_variable
   final Logger logger = Logger("initialize");
 
   ///////////////
+  // Setup Infrastructure Cloud Api
+  ///////////////
+  if (enableGoogleCloud) {
+    // TODO: There is probably a better google api for getting the projectId that owns the service account
+    var googleCloudProjectId = "cardboardbot-f4c69";
+    var googleConfigFile = File("cardboard_bot/configs/googleapis_service_account.json");
+    if (googleConfigFile.existsSync()) {
+      // Local Environment
+      await GoogleCloudService.initialize(projectId: googleCloudProjectId, serviceAccountCredentials: googleConfigFile.readAsStringSync());
+    } else {
+      // Cloud Environment
+      await GoogleCloudService.initialize(projectId: googleCloudProjectId);
+    }
+  }
+
+  ///////////////
+  // Get App Configs
+  ///////////////
+  NyxxConfig nyxxConfig;
+  TcgPlayerApiConfig tcgPlayerApiConfig;
+
+  var localAppConfigFile = File("cardboard_bot/configs/app_config.yaml");
+
+  if (localAppConfigFile.existsSync()) {
+    var yamlDocument = loadYamlDocument(localAppConfigFile.readAsStringSync());
+    nyxxConfig = NyxxConfig.fromYaml(yamlDocument);
+    tcgPlayerApiConfig = TcgPlayerApiConfig.fromYaml(yamlDocument);
+  } else if (enableGoogleCloud) {
+    var metadata = (await GoogleCloudService().getComputeEngineMetadata())!;
+    nyxxConfig = NyxxConfig.fromMetadata(metadata);
+    tcgPlayerApiConfig = TcgPlayerApiConfig.fromMetadata(metadata);
+  } else {
+    throw Exception("There needs to be at least one provider of app_config!");
+  }
+
+
+  ///////////////
   // Setup Nyxx Bot
   ////////////////
-
   INyxxWebsocket bot = NyxxFactory.createNyxxWebsocket(
-    CardboardBotConfigYaml.nyxx.token,
+    nyxxConfig.token,
     CardboardBot.intents,
   )
     ..registerPlugin(IgnoreExceptions())
@@ -43,12 +82,12 @@ Future<void> initialize() async {
   /////////////////////////
   // Setup CardboardBot
   //////////////////////////
-
   initializeTcgPlayerClient(
-    publicKey: CardboardBotConfigYaml.tcgPlayerApiConfig.publicKey,
-    privateKey: CardboardBotConfigYaml.tcgPlayerApiConfig.privateKey,
+    publicKey: tcgPlayerApiConfig.publicKey,
+    privateKey: tcgPlayerApiConfig.privateKey,
   );
 
+  //TODO: Consider abstracting out persistence with a provider.
   TcgPlayerCachingService tcgPlayerService = await TcgPlayerCachingService.initialize([
     InclusionRule(categoryMatch: RegExp("pokemon", caseSensitive: false)),
     InclusionRule(categoryMatch: RegExp("flesh and blood", caseSensitive: false)),
@@ -56,34 +95,17 @@ Future<void> initialize() async {
     InclusionRule(categoryMatch: RegExp("weiss schwarz", caseSensitive: false)),
   ]);
 
+  //TODO: Consider abstracting out the persistence with a provider.
   await CardboardBot.boot(
     bot: bot,
     interactions: interactions,
     tcgPlayerService: tcgPlayerService,
   );
 
-  /////////////////////////////
+  ///////////////////////
   // Sync Interactions
-  /////////////////////////
+  ///////////////////////
   interactions.sync();
-}
-
-abstract class CardboardBotConfigYaml {
-  static NyxxConfig? _nyxxConfig;
-
-  static NyxxConfig get nyxx {
-    _nyxxConfig ??= NyxxConfig.fromYaml(_getYamlDocument());
-    return _nyxxConfig!;
-  }
-
-  static TcgPlayerApiConfig? _tcgPlayerApiConfig;
-
-  static TcgPlayerApiConfig get tcgPlayerApiConfig {
-    _tcgPlayerApiConfig ??= TcgPlayerApiConfig.fromYaml(_getYamlDocument());
-    return _tcgPlayerApiConfig!;
-  }
-
-  static YamlDocument _getYamlDocument() => loadYamlDocument(File("configs/cardboard_bot_config.yaml").readAsStringSync());
 }
 
 class NyxxConfig {
@@ -97,6 +119,12 @@ class NyxxConfig {
     dynamic node = yaml.contents.value["discordBot"];
     return NyxxConfig(
       node["token"] as String,
+    );
+  }
+
+  factory NyxxConfig.fromMetadata(gce.Metadata metadata) {
+    return NyxxConfig(
+      metadata.items!.firstWhere((element) => element.key == "discord_bot_token").value!
     );
   }
 }
@@ -115,6 +143,13 @@ class TcgPlayerApiConfig {
     return TcgPlayerApiConfig(
       node["publicKey"] as String,
       node["privateKey"] as String,
+    );
+  }
+
+  factory TcgPlayerApiConfig.fromMetadata(gce.Metadata metadata) {
+    return TcgPlayerApiConfig(
+      metadata.items!.firstWhere((element) => element.key == "tcgplayer_public_key").value!,
+      metadata.items!.firstWhere((element) => element.key == "tcgplayer_private_key").value!,
     );
   }
 }

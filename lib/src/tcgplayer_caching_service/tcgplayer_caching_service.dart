@@ -38,8 +38,8 @@ class TcgPlayerCachingService {
   List<InclusionRule> inclusionRules;
 
   final JsonEncoder _jsonEncoder = JsonEncoder();
-  static const String _productCachePath = 'data/tcgplayer/product_cache.gzip';
-  static const String _priceCachePath = 'data/tcgplayer/price_cache.gzip';
+  static const String _productCachePath = 'cardboard_bot/data/tcgplayer/product_cache.gzip';
+  static const String _priceCachePath = 'cardboard_bot/data/tcgplayer/price_cache.gzip';
   static const Duration _priceCacheMaxAge = Duration(hours: 1);
 
   Timer? _refreshProductCacheTimer;

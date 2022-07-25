@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:cardboard_bot/src/google_cloud_services/google_cloud_service.dart';
 import 'package:nyxx/nyxx.dart';
 
 import 'action.dart';
@@ -46,7 +47,8 @@ abstract class ActionService<A extends Action> {
     bootAction(newAction);
 
     //Update Persisted Storage
-    await _persistToStorage();
+    // await _persistToStorage();
+    await _persistToCloudStorage();
     return newAction;
   }
 
@@ -58,7 +60,8 @@ abstract class ActionService<A extends Action> {
     shutdownAction(action);
 
     //Update Persisted Storage
-    if (action != null) await _persistToStorage();
+    // if (action != null) await _persistToStorage();
+    if (action != null) await _persistToCloudStorage();
     return action;
   }
 
@@ -72,7 +75,8 @@ abstract class ActionService<A extends Action> {
   }
 
   Future<ActionService<A>> boot() async {
-    await _loadFromStorage();
+    // await _loadFromStorage();
+    await _readFromCloudStorage();
     getActions().forEach((action) {
       shutdownAction(action);
       bootAction(action);
@@ -80,13 +84,35 @@ abstract class ActionService<A extends Action> {
     return this;
   }
 
+  Future<void> _readFromCloudStorage() async {
+    List<A>? actions = await GoogleCloudService().readList<A>(
+      fromJson: (dynamic d) => actionFromJson(d as Map<String, dynamic>),
+      name: getFileName(),
+    );
+    _actionStoreCache = actions == null ? {} : {
+      for (var ownerIdString in actions.map<int>((e) => e.ownerId.id).toSet())
+        ownerIdString: SplayTreeMap.fromIterable(
+          actions.where((A element) => element.ownerId.id == ownerIdString),
+          key: (e) => e.getId(),
+          value: (e) => e,
+        )
+    };
+  }
+
+  Future<void> _persistToCloudStorage() async {
+    await GoogleCloudService().write(
+      name: getFileName(),
+      object: _actionStoreCache.values.expand<A>((element) => element.values).toList(),
+    );
+  }
+
   Future<void> _persistToStorage() async {
-    var file = await File('data/actions/${getFileName()}.json').create(recursive: true);
+    var file = await File('cardboard_bot/data/actions/${getFileName()}.json').create(recursive: true);
     await file.writeAsString(_encode(_actionStoreCache));
   }
 
   Future<void> _loadFromStorage() async {
-    var file = File('data/actions/${getFileName()}.json');
+    var file = File('cardboard_bot/data/actions/${getFileName()}.json');
     if (await file.exists()) {
       _actionStoreCache = _decode(await file.readAsString());
     } else {

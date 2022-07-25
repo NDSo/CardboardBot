@@ -118,7 +118,7 @@ class TcgPlayerAlertActionService extends ActionService<TcgPlayerAlertAction> {
   }
 
   @override
-  String getName() => "tcgplayer_alert";
+  String getName() => "TcgPlayerAlertAction";
 
   @override
   void bootAction(TcgPlayerAlertAction? action) {

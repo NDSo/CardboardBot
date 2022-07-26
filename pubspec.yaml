@@ -18,7 +18,7 @@ dependencies:
       url: https://github.com/NDSo/nyxx_interactions.git
       ref: my_custom
   http: ^0.13.3
-  json_annotation: ^4.4.0
+  json_annotation: ^4.6.0
   intl: ^0.17.0
   logging: ^1.0.2
   collection: ^1.16.0

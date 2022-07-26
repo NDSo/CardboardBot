@@ -9,7 +9,7 @@ class Sku extends ApiResult {
   final int productId;
   final int languageId;
   final int printingId;
-  final int conditionId;
+  final int? conditionId;
 
   Sku({
     required this.skuId,

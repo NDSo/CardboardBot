@@ -32,7 +32,7 @@ class SkuWrapper implements Sku {
   // late final Language language;
 
   @override
-  int get conditionId => _sku.conditionId;
+  int? get conditionId => _sku.conditionId;
 
   @override
   int get languageId => _sku.languageId;

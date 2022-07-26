@@ -89,10 +89,7 @@ Future<void> initialize({required bool enableGoogleCloud}) async {
 
   //TODO: Consider abstracting out persistence with a provider.
   TcgPlayerCachingService tcgPlayerService = await TcgPlayerCachingService.initialize([
-    InclusionRule(categoryMatch: RegExp("pokemon", caseSensitive: false)),
-    InclusionRule(categoryMatch: RegExp("flesh and blood", caseSensitive: false)),
-    InclusionRule(categoryMatch: RegExp("final fantasy", caseSensitive: false)),
-    InclusionRule(categoryMatch: RegExp("weiss schwarz", caseSensitive: false)),
+    InclusionRule(categoryMatch: RegExp(".+", caseSensitive: false)),
   ]);
 
   //TODO: Consider abstracting out the persistence with a provider.

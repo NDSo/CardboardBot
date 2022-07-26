@@ -14,7 +14,7 @@ class InclusionRule {
 
   bool matchGroup(Group group) {
     if (groupMatch.isEmpty) return true;
-    return groupMatch.any((regExp) => regExp.hasMatch(group.name) || regExp.hasMatch(group.abbreviation));
+    return groupMatch.any((regExp) => regExp.hasMatch(group.name) || regExp.hasMatch(group.abbreviation ?? ""));
   }
 
   bool matchCategoryAndGroup(Category category, Group group) {

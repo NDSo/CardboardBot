@@ -234,7 +234,7 @@ class TcgPlayerCachingService {
     Map<int, List<Rarity>> raritiesByCategoryId = await _getApiCategoryRarities(categoryList);
 
     // Only query products for new (to me) groups or recent groups
-    DateTime cutoff = DateTime.now().subtract(Duration(days: 365));
+    DateTime cutoff = DateTime.now().subtract(Duration(days: 30));
     List<Group> recentOrNewGroupList = groupList //
         .where((group) => group.publishedOn.isAfter(cutoff) || !_productCache.groupById.keys.contains(group.groupId))
         .toList();

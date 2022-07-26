@@ -8,7 +8,7 @@ class Group extends ApiResult {
   int groupId;
   int categoryId;
   String name;
-  String abbreviation;
+  String? abbreviation;
   bool isSupplemental;
   DateTime publishedOn;
   DateTime modifiedOn;

@@ -80,30 +80,30 @@ class TcgPlayerAlertCommand extends CommandOptionBuilder {
           tcgPlayerService
               .searchCategories(anyName: RegExp("${event.focusedOption.value}", caseSensitive: false))
               .toSet()
-              .map((e) => ArgChoiceBuilder(e.displayName.substringSafe(0, 100), e.categoryId.toString()))
-              .toList()
               .sorted((a, b) => a.name.compareTo(b.name))
               .sorted((a, b) => a.name.length.compareTo(b.name.length))
+              .sorted((b, a) => a.popularity.compareTo(b.popularity))
+              .map((e) => ArgChoiceBuilder(e.displayName.substringSafe(0, 100), e.categoryId.toString()))
+              .toList()
               .subListSafe(0, 25),
         );
       case _groupArg:
         return event.respond(
           tcgPlayerService
               .searchGroups(
-                categoryId: int.parse(event.options.where((element) => element.name == _categoryArg).first.value),
+                categoryId: int.parse(event.options.where((element) => element.name == _categoryArg).first.value as String),
                 name: RegExp("${event.focusedOption.value}", caseSensitive: false),
               )
               .toSet()
+              .sorted((b, a) => a.publishedOn.compareTo(b.publishedOn))
               .map((e) => ArgChoiceBuilder(e.name.substringSafe(0, 100), e.groupId.toString()))
               .toList()
-              .sorted((a, b) => a.name.compareTo(b.name))
-              .sorted((a, b) => a.name.length.compareTo(b.name.length))
               .subListSafe(0, 25),
         );
       case _skuArg:
         var options = (await tcgPlayerService //
                 .searchProductsByGroupId(
-          groupId: int.parse(event.options.where((element) => element.name == _groupArg).first.value),
+          groupId: int.parse(event.options.where((element) => element.name == _groupArg).first.value as String),
           anyName: RegExp("^${event.focusedOption.value}.*", caseSensitive: false),
         ))
             .sorted((a, b) => a.name.compareTo(b.name))
@@ -151,8 +151,8 @@ class TcgPlayerAlertCommand extends CommandOptionBuilder {
       required TcgPlayerCachingClient tcgPlayerService,
       required TcgPlayerAlertActionService tcgPlayerAlertActionService}) async {
     await context.acknowledge(hidden: true);
-    int skuId = int.parse(context.getArg(_skuArg).value);
-    num maxPrice = context.getArg(_priceArg).value;
+    int skuId = int.parse(context.getArg(_skuArg).value as String);
+    num maxPrice = context.getArg(_priceArg).value as num;
 
     tcgPlayerAlertActionService.upsert(TcgPlayerAlertAction.create(
       ownerId: context.interaction.userAuthor!.id,
@@ -172,7 +172,7 @@ class TcgPlayerAlertCommand extends CommandOptionBuilder {
       required TcgPlayerCachingClient tcgPlayerService,
       required TcgPlayerAlertActionService tcgPlayerAlertActionService}) async {
     await context.acknowledge(hidden: true);
-    String actionId = context.getArg(_skuArg).value;
+    String actionId = context.getArg(_skuArg).value as String;
     Snowflake ownerId = context.interaction.userAuthor!.id;
 
     await tcgPlayerAlertActionService.delete(ownerId, actionId);

@@ -179,7 +179,7 @@ class TcgPlayerCachingClient {
     // }
     // return _skuPriceCacheById;
     var skuPriceCacheList =
-        await GoogleCloudService().readList<SkuPriceCache>(fromJson: (json) => SkuPriceCache.fromJson(json), name: "TcgPlayerSkuPriceCache", zip: true);
+        await GoogleCloudService().readList<SkuPriceCache>(fromJson: (json) => SkuPriceCache.fromJson(json as Map<String, dynamic>), name: "TcgPlayerSkuPriceCache", zip: true);
     if (skuPriceCacheList != null) _skuPriceCacheById = Map.fromIterables(skuPriceCacheList.map((e) => e.skuPrice.skuId), skuPriceCacheList);
     return _skuPriceCacheById;
   }

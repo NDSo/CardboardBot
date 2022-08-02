@@ -89,14 +89,16 @@ abstract class ActionService<A extends Action> {
       fromJson: (dynamic d) => actionFromJson(d as Map<String, dynamic>),
       name: getFileName(),
     );
-    _actionStoreCache = actions == null ? {} : {
-      for (var ownerIdString in actions.map<int>((e) => e.ownerId.id).toSet())
-        ownerIdString: SplayTreeMap.fromIterable(
-          actions.where((A element) => element.ownerId.id == ownerIdString),
-          key: (e) => e.getId(),
-          value: (e) => e,
-        )
-    };
+    _actionStoreCache = actions == null
+        ? {}
+        : {
+            for (var ownerIdString in actions.map<int>((e) => e.ownerId.id).toSet())
+              ownerIdString: SplayTreeMap.from(
+                {
+                  for (var action in actions.where((A element) => element.ownerId.id == ownerIdString)) action.getId(): action,
+                },
+              )
+          };
   }
 
   Future<void> _persistToCloudStorage() async {
@@ -122,16 +124,17 @@ abstract class ActionService<A extends Action> {
 
   Map<int, SplayTreeMap<String, A>> _decode(String string) {
     List<A> actions = (json.decode(string) as List)
+        .cast<Map<String, dynamic>>()
         .map<A>(
           (e) => actionFromJson(e),
         )
         .toList();
     return {
       for (var ownerIdString in actions.map<int>((e) => e.ownerId.id).toSet())
-        ownerIdString: SplayTreeMap.fromIterable(
-          actions.where((A element) => element.ownerId.id == ownerIdString),
-          key: (e) => e.getId(),
-          value: (e) => e,
+        ownerIdString: SplayTreeMap.from(
+          {
+            for (var action in actions.where((A element) => element.ownerId.id == ownerIdString)) action.getId(): action,
+          },
         )
     };
   }

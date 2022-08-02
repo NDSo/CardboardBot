@@ -43,24 +43,24 @@ class TcgPlayerGroupSummaryCommand extends CommandOptionBuilder {
           tcgPlayerService
               .searchCategories(anyName: RegExp("${event.focusedOption.value}", caseSensitive: false))
               .toSet()
-              .map((e) => ArgChoiceBuilder(e.displayName.substringSafe(0, 100), e.categoryId.toString()))
-              .toList()
               .sorted((a, b) => a.name.compareTo(b.name))
               .sorted((a, b) => a.name.length.compareTo(b.name.length))
+              .sorted((b, a) => a.popularity.compareTo(b.popularity))
+              .map((e) => ArgChoiceBuilder(e.displayName.substringSafe(0, 100), e.categoryId.toString()))
+              .toList()
               .subListSafe(0, 25),
         );
       case _groupArg:
         return event.respond(
           tcgPlayerService
               .searchGroups(
-                categoryId: int.parse(event.options.where((element) => element.name == _categoryArg).first.value),
+                categoryId: int.parse(event.options.where((element) => element.name == _categoryArg).first.value as String),
                 name: RegExp("${event.focusedOption.value}", caseSensitive: false),
               )
               .toSet()
+              .sorted((b, a) => a.publishedOn.compareTo(b.publishedOn))
               .map((e) => ArgChoiceBuilder(e.name.substringSafe(0, 100), e.groupId.toString()))
               .toList()
-              .sorted((a, b) => a.name.compareTo(b.name))
-              .sorted((a, b) => a.name.length.compareTo(b.name.length))
               .subListSafe(0, 25),
         );
     }
@@ -68,8 +68,8 @@ class TcgPlayerGroupSummaryCommand extends CommandOptionBuilder {
 
   static Future<void> _infoHandler({required ISlashCommandInteractionEvent context, required TcgPlayerCachingClient tcgPlayerService}) async {
     await context.acknowledge();
-    int categoryId = int.parse(context.getArg(_categoryArg).value);
-    int groupId = int.parse(context.getArg(_groupArg).value);
+    int categoryId = int.parse(context.getArg(_categoryArg).value as String);
+    int groupId = int.parse(context.getArg(_groupArg).value as String);
 
     Category category = tcgPlayerService.searchCategories(categoryId: categoryId).first;
     Group group = tcgPlayerService.searchGroups(groupId: groupId).first;

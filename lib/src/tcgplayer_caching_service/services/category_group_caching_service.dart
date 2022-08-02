@@ -76,7 +76,7 @@ class CategoryGroupCachingService {
     // }
     // return _productCache;
     _categoryGroupCache =
-        await GoogleCloudService().read<CategoryGroupCache>(fromJson: (json) => CategoryGroupCache.fromJson(json), name: "TcgPlayerProductCache", zip: true) ??
+        await GoogleCloudService().read<CategoryGroupCache>(fromJson: (json) => CategoryGroupCache.fromJson(json as Map<String, dynamic>), name: "TcgPlayerProductCache", zip: true) ??
             _categoryGroupCache;
     return _categoryGroupCache;
   }

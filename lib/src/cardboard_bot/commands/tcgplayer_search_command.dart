@@ -31,10 +31,11 @@ class TcgPlayerSearchCommand extends CommandOptionBuilder {
                 (p0) => p0.respond(
                   tcgPlayerService //
                       .searchCategories(anyName: RegExp(p0.focusedOption.value as String, caseSensitive: false))
-                      .map((e) => ArgChoiceBuilder(e.displayName.substringSafe(0, 100), e.categoryId.toString()))
-                      .toList()
                       .sorted((a, b) => a.name.compareTo(b.name))
                       .sorted((a, b) => a.name.length.compareTo(b.name.length))
+                      .sorted((b, a) => a.popularity.compareTo(b.popularity))
+                      .map((e) => ArgChoiceBuilder(e.displayName.substringSafe(0, 100), e.categoryId.toString()))
+                      .toList()
                       .subListSafe(0, 25),
                 ),
               ),
@@ -47,14 +48,13 @@ class TcgPlayerSearchCommand extends CommandOptionBuilder {
                 (event) => event.respond(
                   tcgPlayerService
                       .searchGroups(
-                        categoryId: int.parse(event.options.where((element) => element.name == _categoryFilterArg).first.value),
+                        categoryId: int.parse(event.options.where((element) => element.name == _categoryFilterArg).first.value as String),
                         name: RegExp("${event.focusedOption.value}", caseSensitive: false),
                       )
                       .toSet()
+                      .sorted((b, a) => a.publishedOn.compareTo(b.publishedOn))
                       .map((e) => ArgChoiceBuilder(e.name.substringSafe(0, 100), e.groupId.toString()))
                       .toList()
-                      .sorted((a, b) => a.name.compareTo(b.name))
-                      .sorted((a, b) => a.name.length.compareTo(b.name.length))
                       .subListSafe(0, 25),
                 ),
               ),
@@ -67,7 +67,7 @@ class TcgPlayerSearchCommand extends CommandOptionBuilder {
                 (p0) async => p0.respond(
                   (await tcgPlayerService //
                       .searchProductsByGroupId(
-                        groupId: int.parse(p0.options.where((element) => element.name == _groupFilterArg).first.value),
+                        groupId: int.parse(p0.options.where((element) => element.name == _groupFilterArg).first.value as String),
                         anyName: RegExp(".*${p0.focusedOption.value}.*", caseSensitive: false),
                       ))
                       .map((e) => e.name)
@@ -75,7 +75,7 @@ class TcgPlayerSearchCommand extends CommandOptionBuilder {
                       .toList()
                       .sorted((a, b) => a.compareTo(b))
                       .sorted((a, b) => a.length.compareTo(b.length))
-                      .prependedBy([p0.focusedOption.value ?? ""])
+                      .prependedBy([p0.focusedOption.value as String ?? ""])
                       .where((e) => e.isNotEmpty)
                       .map((e) => e.substringSafe(0, 100))
                       .map((name) => ArgChoiceBuilder(name, name))
@@ -96,8 +96,8 @@ class TcgPlayerSearchCommand extends CommandOptionBuilder {
   static void _searchHandler({required ISlashCommandInteractionEvent context, required TcgPlayerCachingClient tcgPlayerService}) async {
     await context.acknowledge();
 
-    int groupId = int.parse(context.getArg(_groupFilterArg).value);
-    String searchString = context.getArg(_nameArg).value;
+    int groupId = int.parse(context.getArg(_groupFilterArg).value as String);
+    String searchString = context.getArg(_nameArg).value as String;
     RegExp searchRegex = RegExp(searchString, caseSensitive: false);
 
     List<ProductWrapper> products = (await tcgPlayerService //

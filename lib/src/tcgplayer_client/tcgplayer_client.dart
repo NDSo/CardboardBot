@@ -51,7 +51,7 @@ class TcgPlayerClient extends IOClient {
           "client_secret": _privateKey,
         },
       );
-      _bearerToken = _BearerToken.fromJson(jsonDecode(response.body));
+      _bearerToken = _BearerToken.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
     }
   }
 
@@ -154,8 +154,8 @@ class _BearerToken {
   _BearerToken(this._value, this._issued, this._expires);
 
   factory _BearerToken.fromJson(Map<String, dynamic> json) => _BearerToken(
-        json["access_token"],
-        TcgPlayerClient.dateFormat.parse(json[".issued"]),
-        TcgPlayerClient.dateFormat.parse(json[".expires"]),
+        json["access_token"] as String,
+        TcgPlayerClient.dateFormat.parse(json[".issued"] as String),
+        TcgPlayerClient.dateFormat.parse(json[".expires"] as String),
       );
 }

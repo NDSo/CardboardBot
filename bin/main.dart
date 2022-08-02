@@ -88,21 +88,21 @@ Future<void> initialize({required bool enableGoogleCloud}) async {
   );
 
   //TODO: Consider abstracting out persistence with a provider.
-  TcgPlayerCachingService tcgPlayerService = await TcgPlayerCachingService.initialize([
-    // InclusionRule(categoryMatch: RegExp(".+", caseSensitive: false)),
-    InclusionRule(categoryMatch: RegExp("pokemon", caseSensitive: false)),
-    InclusionRule(categoryMatch: RegExp("flesh and blood", caseSensitive: false)),
-    InclusionRule(categoryMatch: RegExp("final fantasy", caseSensitive: false)),
-    InclusionRule(categoryMatch: RegExp("weiss schwarz", caseSensitive: false)),
-    InclusionRule(categoryMatch: RegExp("YuGiOh", caseSensitive: false)),
+  TcgPlayerCachingClient tcgPlayerService = await TcgPlayerCachingClient.initialize([
+    InclusionRule(categoryMatch: RegExp(".+", caseSensitive: false)),
+    // InclusionRule(categoryMatch: RegExp("pokemon", caseSensitive: false)),
+    // InclusionRule(categoryMatch: RegExp("flesh and blood", caseSensitive: false)),
+    // InclusionRule(categoryMatch: RegExp("final fantasy", caseSensitive: false)),
+    // InclusionRule(categoryMatch: RegExp("weiss schwarz", caseSensitive: false)),
+    // InclusionRule(categoryMatch: RegExp("YuGiOh", caseSensitive: false)),
     // InclusionRule(categoryMatch: RegExp("Cardfight Vanguard", caseSensitive: false)),
     // InclusionRule(categoryMatch: RegExp("Digimon", caseSensitive: false)),
     // InclusionRule(categoryMatch: RegExp("Dragon Ball", caseSensitive: false)),
-    InclusionRule(categoryMatch: RegExp("Force of Will", caseSensitive: false)),
+    // InclusionRule(categoryMatch: RegExp("Force of Will", caseSensitive: false)),
     // InclusionRule(categoryMatch: RegExp("Future Card BuddyFight", caseSensitive: false)),
-    // MTG is the gigabyte problem
+    // // MTG is the gigabyte problem
     // InclusionRule(categoryMatch: RegExp("Magic the Gathering", caseSensitive: false)),
-    InclusionRule(categoryMatch: RegExp("MetaZoo", caseSensitive: false)),
+    // InclusionRule(categoryMatch: RegExp("MetaZoo", caseSensitive: false)),
     // InclusionRule(categoryMatch: RegExp("My Little Pony", caseSensitive: false)),
     // InclusionRule(categoryMatch: RegExp("Star Wars Destiny", caseSensitive: false)),
     // InclusionRule(categoryMatch: RegExp("WoW", caseSensitive: false)),

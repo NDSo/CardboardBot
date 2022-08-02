@@ -14,7 +14,7 @@ import 'tcgplayer_alert_action.dart';
 class TcgPlayerAlertActionService extends ActionService<TcgPlayerAlertAction> {
   // ignore: unused_field
   static final Logger _logger = Logger("$TcgPlayerAlertActionService");
-  final TcgPlayerCachingService _tcgPlayerService;
+  final TcgPlayerCachingClient _tcgPlayerService;
   Timer? _timer;
   StreamSubscription<Map<int, SkuPriceCacheChange>>? _changeSubscription;
 
@@ -63,14 +63,15 @@ class TcgPlayerAlertActionService extends ActionService<TcgPlayerAlertAction> {
 
       for (var ownerIdAndSkuPriceChangeByAlert in skuPriceChangeByAlertByOwnerId.entries) {
         var message = MessageBuilder();
-        message.embeds = ownerIdAndSkuPriceChangeByAlert.value.entries.map((alertAndSkuPriceChange) {
+        message.embeds = (await ownerIdAndSkuPriceChangeByAlert.value.entries.map((alertAndSkuPriceChange) async {
           return _buildProductEmbed(
-            product: _tcgPlayerService.searchProductsWrapped(skuId: alertAndSkuPriceChange.key.skuId).tryFirst()!,
+            product: (await _tcgPlayerService.searchProductsBySkuId(skuId: alertAndSkuPriceChange.key.skuId)).first.wrap(_tcgPlayerService),
             maxPrice: alertAndSkuPriceChange.key.maxPrice,
             skuPriceChange: alertAndSkuPriceChange.value,
             botColor: botColor,
           );
-        }).toList();
+        }).waitAll())
+            .toList();
 
         (await bot.fetchUser(ownerIdAndSkuPriceChangeByAlert.key)).sendMessage(message);
       }

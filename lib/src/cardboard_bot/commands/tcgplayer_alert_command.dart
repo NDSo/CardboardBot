@@ -17,7 +17,7 @@ class TcgPlayerAlertCommand extends CommandOptionBuilder {
   static const String _skuArg = "product";
   static const String _priceArg = "price";
 
-  TcgPlayerAlertCommand({required TcgPlayerCachingService tcgPlayerService, required TcgPlayerAlertActionService tcgPlayerAlertActionService})
+  TcgPlayerAlertCommand({required TcgPlayerCachingClient tcgPlayerService, required TcgPlayerAlertActionService tcgPlayerAlertActionService})
       : super(
           CommandOptionType.subCommandGroup,
           "alert",
@@ -73,7 +73,7 @@ class TcgPlayerAlertCommand extends CommandOptionBuilder {
           ],
         );
 
-  static Future<void> _alertAddAutoCompleteHandler({required IAutocompleteInteractionEvent event, required TcgPlayerCachingService tcgPlayerService}) async {
+  static Future<void> _alertAddAutoCompleteHandler({required IAutocompleteInteractionEvent event, required TcgPlayerCachingClient tcgPlayerService}) async {
     switch (event.focusedOption.name) {
       case _categoryArg:
         return event.respond(
@@ -101,12 +101,11 @@ class TcgPlayerAlertCommand extends CommandOptionBuilder {
               .subListSafe(0, 25),
         );
       case _skuArg:
-        var options = tcgPlayerService //
-            .searchProducts(
-              categoryId: int.parse(event.options.where((element) => element.name == _categoryArg).first.value),
-              groupId: int.parse(event.options.where((element) => element.name == _groupArg).first.value),
-              anyName: RegExp("^${event.focusedOption.value}.*", caseSensitive: false),
-            )
+        var options = (await tcgPlayerService //
+                .searchProductsByGroupId(
+          groupId: int.parse(event.options.where((element) => element.name == _groupArg).first.value),
+          anyName: RegExp("^${event.focusedOption.value}.*", caseSensitive: false),
+        ))
             .sorted((a, b) => a.name.compareTo(b.name))
             .sorted((a, b) => a.name.length.compareTo(b.name.length))
             .expand(
@@ -124,23 +123,21 @@ class TcgPlayerAlertCommand extends CommandOptionBuilder {
 
   static Future<void> _alertDeleteAutoCompleteHandler(
       {required IAutocompleteInteractionEvent event,
-      required TcgPlayerCachingService tcgPlayerService,
+      required TcgPlayerCachingClient tcgPlayerService,
       required TcgPlayerAlertActionService tcgPlayerAlertActionService}) async {
     switch (event.focusedOption.name) {
       case _skuArg:
         return event.respond(
-          tcgPlayerAlertActionService
-              .getActions(ownerId: event.interaction.userAuthor!.id)
-              .map((action) {
-                ProductExtended product = tcgPlayerService.searchProducts(skuId: action.skuId).first;
-                Sku sku = product.skus.firstWhere((element) => element.skuId == action.skuId);
-                Printing printing = tcgPlayerService.searchPrintings(categoryId: product.categoryId, printingId: sku.printingId).first;
-                Condition condition = tcgPlayerService.searchConditions(categoryId: product.categoryId, conditionId: sku.conditionId).first;
-                return ArgChoiceBuilder(
-                    "${product.name} | ${printing.name} | ${condition.name}${action.maxPrice == null ? "" : " | ${action.maxPrice?.toFormat(usdFormat)}"}"
-                        .substringSafe(0, 100),
-                    action.getId());
-              })
+          (await tcgPlayerAlertActionService.getActions(ownerId: event.interaction.userAuthor!.id).map((action) async {
+            ProductExtended product = (await tcgPlayerService.searchProductsBySkuId(skuId: action.skuId)).first;
+            Sku sku = product.skus.firstWhere((element) => element.skuId == action.skuId);
+            Printing printing = tcgPlayerService.searchPrintings(categoryId: product.categoryId, printingId: sku.printingId).first;
+            Condition condition = tcgPlayerService.searchConditions(categoryId: product.categoryId, conditionId: sku.conditionId).first;
+            return ArgChoiceBuilder(
+                "${product.name} | ${printing.name} | ${condition.name}${action.maxPrice == null ? "" : " | ${action.maxPrice?.toFormat(usdFormat)}"}"
+                    .substringSafe(0, 100),
+                action.getId());
+          }).waitAll())
               .toList()
               .sorted((a, b) => a.name.compareTo(b.name))
               .sorted((a, b) => a.name.length.compareTo(b.name.length))
@@ -151,7 +148,7 @@ class TcgPlayerAlertCommand extends CommandOptionBuilder {
 
   static Future<void> _alertAddHandler(
       {required ISlashCommandInteractionEvent context,
-      required TcgPlayerCachingService tcgPlayerService,
+      required TcgPlayerCachingClient tcgPlayerService,
       required TcgPlayerAlertActionService tcgPlayerAlertActionService}) async {
     await context.acknowledge(hidden: true);
     int skuId = int.parse(context.getArg(_skuArg).value);
@@ -162,7 +159,7 @@ class TcgPlayerAlertCommand extends CommandOptionBuilder {
       skuId: skuId,
       maxPrice: maxPrice,
     ));
-    ProductWrapper productWrapper = tcgPlayerService.searchProductsWrapped(skuId: skuId).first;
+    ProductWrapper productWrapper = (await tcgPlayerService.searchProductsBySkuId(skuId: skuId)).first.wrap(tcgPlayerService);
     SkuWrapper skuWrapper = productWrapper.skus.firstWhere((element) => element.skuId == skuId);
     String target = "${productWrapper.name} | ${skuWrapper.printing.name} | ${skuWrapper.condition.name}";
     await context.respond(
@@ -172,7 +169,7 @@ class TcgPlayerAlertCommand extends CommandOptionBuilder {
 
   static void _alertDeleteHandler(
       {required ISlashCommandInteractionEvent context,
-      required TcgPlayerCachingService tcgPlayerService,
+      required TcgPlayerCachingClient tcgPlayerService,
       required TcgPlayerAlertActionService tcgPlayerAlertActionService}) async {
     await context.acknowledge(hidden: true);
     String actionId = context.getArg(_skuArg).value;

@@ -1,12 +1,16 @@
 import 'package:cardboard_bot/tcgplayer_client.dart';
 
-import '../tcgplayer_caching_service.dart';
+import '../tcgplayer_caching_client.dart';
 import 'sku_wrapper.dart';
+
+extension ProductExtendedWrapperExtension on ProductExtended {
+  ProductWrapper wrap(TcgPlayerCachingClient tcgPlayerCachingClient) => ProductWrapper(this, tcgPlayerCachingClient);
+}
 
 class ProductWrapper implements ProductExtended {
   final ProductExtended _productExtended;
 
-  ProductWrapper(ProductExtended product, TcgPlayerCachingService tcgPlayerService)
+  ProductWrapper(ProductExtended product, TcgPlayerCachingClient tcgPlayerService)
       : _productExtended = product,
         cachedOn = tcgPlayerService.productCacheTimestamp,
         category = tcgPlayerService
@@ -15,7 +19,7 @@ class ProductWrapper implements ProductExtended {
         )
             .first,
         group = tcgPlayerService.searchGroups(groupId: product.groupId).first,
-        skus = product.skus.map((sku) => SkuWrapper(sku, tcgPlayerService)).toList();
+        skus = product.skus.map((sku) => SkuWrapper(sku, product, tcgPlayerService)).toList();
 
   final DateTime cachedOn;
   final Category category;

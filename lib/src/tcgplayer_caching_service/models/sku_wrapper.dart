@@ -1,16 +1,11 @@
 import 'package:cardboard_bot/tcgplayer_client.dart';
 
-import '../tcgplayer_caching_service.dart';
+import '../tcgplayer_caching_client.dart';
 
 class SkuWrapper implements Sku {
   final Sku _sku;
 
-  SkuWrapper(Sku sku, TcgPlayerCachingService tcgPlayerService) : _sku = sku {
-    product = tcgPlayerService
-        .searchProducts(
-      productId: sku.productId,
-    )
-        .first;
+  SkuWrapper(Sku sku, this.product, TcgPlayerCachingClient tcgPlayerService) : _sku = sku {
     condition = tcgPlayerService
         .searchConditions(
       categoryId: product.categoryId,

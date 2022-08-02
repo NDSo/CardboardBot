@@ -9,14 +9,11 @@ publish_to: none
 
 
 dependencies:
-  nyxx:
-    git:
-      url: https://github.com/NDSo/nyxx.git
-      ref: next
+  nyxx: ^4.0.0
   nyxx_interactions:
     git:
       url: https://github.com/NDSo/nyxx_interactions.git
-      ref: my_custom
+      ref: fix_interaction_handling_mapping_for_global_slash_command
   http: ^0.13.3
   json_annotation: ^4.6.0
   intl: ^0.17.0

@@ -13,7 +13,7 @@ class TcgPlayerGroupSummaryCommand extends CommandOptionBuilder {
   static const String _categoryArg = "category";
   static const String _groupArg = "group";
 
-  TcgPlayerGroupSummaryCommand({required TcgPlayerCachingService tcgPlayerService})
+  TcgPlayerGroupSummaryCommand({required TcgPlayerCachingClient tcgPlayerService})
       : super(
           CommandOptionType.subCommand,
           "group_summary",
@@ -36,7 +36,7 @@ class TcgPlayerGroupSummaryCommand extends CommandOptionBuilder {
     registerHandler((p0) => _infoHandler(context: p0, tcgPlayerService: tcgPlayerService));
   }
 
-  static Future<void> _alertAddAutoCompleteHandler({required IAutocompleteInteractionEvent event, required TcgPlayerCachingService tcgPlayerService}) async {
+  static Future<void> _alertAddAutoCompleteHandler({required IAutocompleteInteractionEvent event, required TcgPlayerCachingClient tcgPlayerService}) async {
     switch (event.focusedOption.name) {
       case _categoryArg:
         return event.respond(
@@ -66,7 +66,7 @@ class TcgPlayerGroupSummaryCommand extends CommandOptionBuilder {
     }
   }
 
-  static Future<void> _infoHandler({required ISlashCommandInteractionEvent context, required TcgPlayerCachingService tcgPlayerService}) async {
+  static Future<void> _infoHandler({required ISlashCommandInteractionEvent context, required TcgPlayerCachingClient tcgPlayerService}) async {
     await context.acknowledge();
     int categoryId = int.parse(context.getArg(_categoryArg).value);
     int groupId = int.parse(context.getArg(_groupArg).value);
@@ -74,8 +74,9 @@ class TcgPlayerGroupSummaryCommand extends CommandOptionBuilder {
     Category category = tcgPlayerService.searchCategories(categoryId: categoryId).first;
     Group group = tcgPlayerService.searchGroups(groupId: groupId).first;
 
-    List<ProductWrapper> products = tcgPlayerService
-        .searchProductsWrapped(groupId: groupId)
+    List<ProductWrapper> products = (await tcgPlayerService
+        .searchProductsByGroupId(groupId: groupId))
+        .map((e) => e.wrap(tcgPlayerService))
         .where((product) => product.extendedData.any((extendedData) => RegExp("rarity", caseSensitive: false).hasMatch(extendedData.name)))
         .toList();
     Map<int, SkuPriceCache> skuPrices =

@@ -63,6 +63,12 @@ extension SmartIterable<E> on Iterable<E> {
   }
 }
 
+extension IterableFuture<T> on Iterable<Future<T>> {
+  Future<Iterable<T>> waitAll() async {
+    return await Future.wait(this);
+  }
+}
+
 extension IterableNum on Iterable<num> {
   num sum() => fold(0, (previousValue, element) => previousValue + element);
 

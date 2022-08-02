@@ -20,11 +20,11 @@ class CardboardBot {
   static Future<void> boot({
     required INyxxWebsocket bot,
     required IInteractions interactions,
-    required TcgPlayerCachingService tcgPlayerService,
+    required TcgPlayerCachingClient tcgPlayerService,
   }) async {
     TcgPlayerAlertActionService tcgPlayerAlertActionService = TcgPlayerAlertActionService(bot, tcgPlayerService)..boot();
 
-    _replaceTcgPlayerEmbeds(bot, tcgPlayerService);
+    await _replaceTcgPlayerEmbeds(bot, tcgPlayerService);
 
     interactions.registerSlashCommand(SlashCommandBuilder(
       "tcgplayer",
@@ -37,12 +37,12 @@ class CardboardBot {
     ));
   }
 
-  static void _replaceTcgPlayerEmbeds(INyxxWebsocket bot, TcgPlayerCachingService tcgPlayerService) {
+  static Future<void> _replaceTcgPlayerEmbeds(INyxxWebsocket bot, TcgPlayerCachingClient tcgPlayerService) async {
     RegExp regExp = RegExp(r"tcgplayer.com/product/(\d+)", caseSensitive: false);
     bot.eventsWs.onMessageReceived.listen((event) async {
       Match? match = regExp.firstMatch(event.message.content);
       if (match?.group(1) != null) {
-        ProductWrapper? productWrapper = tcgPlayerService.searchProductsWrapped(productId: int.parse(match!.group(1)!)).tryFirst();
+        ProductWrapper? productWrapper = (await tcgPlayerService.searchProductsByProductId(productId: int.parse(match!.group(1)!))).tryFirst()?.wrap(tcgPlayerService);
         if (productWrapper != null) {
           await event.message.suppressEmbeds();
           var skuPriceCacheById = await tcgPlayerService.getSkuPriceCache(skuIds: productWrapper.skus.map((e) => e.skuId).toList());

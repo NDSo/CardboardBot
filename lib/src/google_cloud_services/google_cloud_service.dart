@@ -1,21 +1,32 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:googleapis_auth/auth_io.dart' show AutoRefreshingAuthClient, ServiceAccountCredentials, clientViaApplicationDefaultCredentials, clientViaServiceAccount;
+import 'package:googleapis_auth/auth_io.dart'
+    show AutoRefreshingAuthClient, ServiceAccountCredentials, clientViaApplicationDefaultCredentials, clientViaServiceAccount;
 import 'package:googleapis/storage/v1.dart' as cs;
 import 'package:googleapis/compute/v1.dart' as compute;
-
+import 'package:googleapis/firestore/v1.dart' as firestore;
 
 class GoogleCloudService {
   static GoogleCloudService? _singleton;
   final cs.StorageApi _storageApi;
   final compute.ComputeApi _computeApi;
+  final firestore.FirestoreApi _firestoreApi;
+
+  firestore.ProjectsDatabasesDocumentsResource get _documentsApi => _firestoreApi.projects.databases.documents;
   final String _projectId;
+
   String get _defaultBucket => "$_projectId.appspot.com";
 
-  GoogleCloudService._internal(this._projectId , this._storageApi, this._computeApi);
+  static String get _firestoreDatabasePath => "projects/cardboardbot-f4c69/databases/(default)";
 
-  factory GoogleCloudService()  {
+  static String get _firestoreDocumentPath => "$_firestoreDatabasePath/documents";
+
+  static String _firestorePath(String name) => "$_firestoreDocumentPath/$name";
+
+  GoogleCloudService._internal(this._projectId, this._storageApi, this._computeApi, this._firestoreApi);
+
+  factory GoogleCloudService() {
     if (_singleton == null) throw Exception("$GoogleCloudService needs initialized!");
     return _singleton!;
   }
@@ -45,6 +56,7 @@ class GoogleCloudService {
       projectId,
       cs.StorageApi(client),
       compute.ComputeApi(client),
+      firestore.FirestoreApi(client),
     );
   }
 
@@ -53,6 +65,36 @@ class GoogleCloudService {
     return project.commonInstanceMetadata;
   }
 
+  // Firestore
+
+  Future<T> get<T>({required T Function(dynamic a) fromJson, required String name, bool zip = false}) async {
+    String string = (await _documentsApi.get(_firestorePath(name))).fields!["object"]!.stringValue!;
+
+    dynamic json;
+    if (zip) {
+      json = jsonDecode(utf8.decode(gzip.decode(base64Decode(string))));
+    } else {
+      json = jsonDecode(string);
+    }
+
+    return fromJson(json);
+  }
+
+  Future<void> patch({required Object object, required String name, bool zip = false}) async {
+    String data;
+    if (zip) {
+      data = base64Encode(gzip.encode(utf8.encode(jsonEncode(object))));
+    } else {
+      data = jsonEncode(object);
+    }
+    await _documentsApi.patch(
+      firestore.Document(
+        name: _firestorePath(name),
+        fields: {"object": firestore.Value(stringValue: data)},
+      ),
+      _firestorePath(name),
+    );
+  }
 
   // CLOUD STORAGE
   Future<void> write({required Object object, required String name, bool zip = false}) async {
@@ -73,10 +115,10 @@ class GoogleCloudService {
     try {
       cs.Media media = await _storageApi.objects
           .get(
-        _defaultBucket,
-        name,
-        downloadOptions: cs.DownloadOptions.fullMedia,
-      )
+            _defaultBucket,
+            name,
+            downloadOptions: cs.DownloadOptions.fullMedia,
+          )
           .then<cs.Media>((value) => value as cs.Media);
       List<int> bytes = (await media.stream.toList()).expand<int>((element) => element).toList();
       dynamic json;
@@ -96,5 +138,4 @@ class GoogleCloudService {
   Future<List<T>?> readList<T>({required T Function(dynamic a) fromJson, required String name, bool zip = false}) async {
     return await read(fromJson: (dynamic d) => (d as List).cast<Map<String, dynamic>>().map<T>(fromJson).toList(), name: name, zip: zip);
   }
-
 }

@@ -31,8 +31,8 @@ class TcgPlayerSearchCommand extends CommandOptionBuilder {
                 (p0) => p0.respond(
                   tcgPlayerService //
                       .searchCategories(anyName: RegExp(p0.focusedOption.value as String, caseSensitive: false))
-                      .sorted((a, b) => a.name.compareTo(b.name))
                       .sorted((a, b) => a.name.length.compareTo(b.name.length))
+                      .sorted((a, b) => a.name.compareTo(b.name))
                       .sorted((b, a) => a.popularity.compareTo(b.popularity))
                       .map((e) => ArgChoiceBuilder(e.displayName.substringSafe(0, 100), e.categoryId.toString()))
                       .toList()
@@ -73,8 +73,8 @@ class TcgPlayerSearchCommand extends CommandOptionBuilder {
                       .map((e) => e.name)
                       .toSet()
                       .toList()
-                      .sorted((a, b) => a.compareTo(b))
                       .sorted((a, b) => a.length.compareTo(b.length))
+                      .sorted((a, b) => a.compareTo(b))
                       .prependedBy([p0.focusedOption.value as String ?? ""])
                       .where((e) => e.isNotEmpty)
                       .map((e) => e.substringSafe(0, 100))

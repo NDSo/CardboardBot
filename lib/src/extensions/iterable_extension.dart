@@ -1,3 +1,5 @@
+import 'package:collection/collection.dart';
+
 typedef NullFunction<T> = T Function();
 
 extension SmartIterable<E> on Iterable<E> {
@@ -51,7 +53,7 @@ extension SmartIterable<E> on Iterable<E> {
 
   List<E> sorted([int Function(E a, E b)? compare]) {
     List<E> thisList = List.of(this);
-    thisList.sort(compare);
+    mergeSort(thisList, compare: compare);
     return thisList;
   }
 
@@ -84,6 +86,6 @@ extension IterableNum on Iterable<num> {
 
   num? max() {
     if (length == 0) return null;
-    return reduce((value, element) =>  -1 * value.compareTo(element));
+    return reduce((value, element) => -1 * value.compareTo(element));
   }
 }

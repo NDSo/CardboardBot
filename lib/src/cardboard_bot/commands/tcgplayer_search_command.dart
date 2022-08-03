@@ -75,7 +75,7 @@ class TcgPlayerSearchCommand extends CommandOptionBuilder {
                       .toList()
                       .sorted((a, b) => a.length.compareTo(b.length))
                       .sorted((a, b) => a.compareTo(b))
-                      .prependedBy([p0.focusedOption.value as String ?? ""])
+                      .prependedBy([p0.focusedOption.value as String? ?? ""])
                       .where((e) => e.isNotEmpty)
                       .map((e) => e.substringSafe(0, 100))
                       .map((name) => ArgChoiceBuilder(name, name))

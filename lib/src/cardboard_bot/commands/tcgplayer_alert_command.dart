@@ -80,7 +80,6 @@ class TcgPlayerAlertCommand extends CommandOptionBuilder {
           tcgPlayerService
               .searchCategories(anyName: RegExp("${event.focusedOption.value}", caseSensitive: false))
               .toSet()
-              .sorted((a, b) => a.name.length.compareTo(b.name.length))
               .sorted((a, b) => a.name.compareTo(b.name))
               .sorted((b, a) => a.popularity.compareTo(b.popularity))
               .map((e) => ArgChoiceBuilder(e.displayName.substringSafe(0, 100), e.categoryId.toString()))
@@ -106,7 +105,6 @@ class TcgPlayerAlertCommand extends CommandOptionBuilder {
           groupId: int.parse(event.options.where((element) => element.name == _groupArg).first.value as String),
           anyName: RegExp("^${event.focusedOption.value}.*", caseSensitive: false),
         ))
-            .sorted((a, b) => a.name.length.compareTo(b.name.length))
             .sorted((a, b) => a.name.compareTo(b.name))
             .expand(
               (product) => product.skus.map((sku) {

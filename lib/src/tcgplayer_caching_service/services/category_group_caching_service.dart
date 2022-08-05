@@ -59,7 +59,7 @@ class CategoryGroupCachingService {
 
     // Run Timers
     _refreshProductCacheTimer?.cancel();
-    _refreshProductCacheTimer = Timer.periodic(Duration(hours: 12), (timer) => _refreshCategoryGroupCache());
+    _refreshProductCacheTimer = Timer.periodic(Duration(hours: 24), (timer) => _refreshCategoryGroupCache());
   }
 
   Future<void> _writeCategoryGroupCacheToStorage() async {

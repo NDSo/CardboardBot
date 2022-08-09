@@ -21,27 +21,4 @@ COPY --from=heavy_base_image /cardboard_bot/bin/main /cardboard_bot/bin/
 
 # Start server.
 ENTRYPOINT ["/cardboard_bot/bin/main"]
-
-
-
-######### LOCAL DEPLOYMENT
-FROM minimal_image as local_development_image
-
-COPY --from=heavy_base_image /cardboard_bot/configs/app_config.yaml /cardboard_bot/configs/
-
-# Custom Arguments
-CMD []
-
-######## CLOUD DEVELOPMENT
-FROM minimal_image as local_cloud_development_image
-
-COPY --from=heavy_base_image /cardboard_bot/configs/googleapis_service_account.json /cardboard_bot/configs/
-
-# Custom Arguments
-CMD ["--google_cloud_project_id", "cardboardbot-f4c69"]
-
-######### CLOUD DEPLOYMENT
-FROM minimal_image as remote_cloud_production_image
-
-# Custom Arguments
 CMD ["--google_cloud_project_id", "cardboardbot-f4c69"]

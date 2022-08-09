@@ -4,28 +4,33 @@ import 'dart:math';
 
 import 'package:cardboard_bot/extensions.dart';
 import 'package:cardboard_bot/nyxx_bot_actions.dart';
+import 'package:cardboard_bot/repository.dart';
 import 'package:cardboard_bot/tcgplayer_caching_service.dart';
 import 'package:logging/logging.dart';
 import 'package:nyxx/nyxx.dart';
 
-import '../config/constants.dart';
+import '../../config/constants.dart';
 import 'tcgplayer_alert_action.dart';
 
 class TcgPlayerAlertActionService extends ActionService<TcgPlayerAlertAction> {
   // ignore: unused_field
   static final Logger _logger = Logger("$TcgPlayerAlertActionService");
   final TcgPlayerCachingClient _tcgPlayerService;
-  Timer? _timer;
-  StreamSubscription<Map<int, SkuPriceCacheChange>>? _changeSubscription;
+
+  final Map<int, SkuPriceCache> _previousSkuPrices = {};
+  final Repository<SkuPriceCache> _previousSkuPriceStorageRepository;
 
   final _SkuIdQueue _skuIdSet = _SkuIdQueue();
 
-  TcgPlayerAlertActionService(INyxxWebsocket bot, this._tcgPlayerService) : super(bot) {
-    setupTimerLoop(Duration.zero);
-    setupSkuPriceChangeListener();
+  TcgPlayerAlertActionService(super.bot, super._actionRepository, this._tcgPlayerService, this._previousSkuPriceStorageRepository) {
+    setupPriceCheckLoop(Duration.zero);
+    Timer.periodic(const Duration(hours: 1), (timer) async {
+      await _previousSkuPriceStorageRepository.upsert(
+          ids: _previousSkuPrices.keys.map((e) => e.toString()).toList(), objects: _previousSkuPrices.values.toList());
+    });
   }
 
-  void setupTimerLoop(Duration queryLatency) {
+  void setupPriceCheckLoop(Duration queryLatency) {
     const int count = 250;
     const Duration desiredMaxAge = Duration(minutes: 3);
     const Duration minimumLatency = Duration(milliseconds: 200);
@@ -35,52 +40,70 @@ class TcgPlayerAlertActionService extends ActionService<TcgPlayerAlertAction> {
     intendedLatency -= queryLatency;
     if (intendedLatency.isNegative) intendedLatency = Duration.zero;
 
-    _timer = Timer(intendedLatency, () async {
+    Timer(intendedLatency, () async {
       var stopwatch = Stopwatch()..start();
       try {
         var skuIds = _skuIdSet.getNextSkuIds(count: 250).toList();
-        await _tcgPlayerService.getSkuPriceCache(skuIds: skuIds, maxAge: desiredMaxAge ~/ 2);
+        await _checkSkuPriceCacheChange(await _tcgPlayerService.searchSkuPriceCachesBySkuIds(skuIds: skuIds));
+      } catch (e, stacktrace) {
+        _logger.severe("Failed to check for sku price changes!", e, stacktrace);
       } finally {
         stopwatch.stop();
-        setupTimerLoop(stopwatch.elapsed);
+        setupPriceCheckLoop(stopwatch.elapsed);
       }
     });
   }
 
-  void setupSkuPriceChangeListener() {
-    _changeSubscription = _tcgPlayerService.onSkuPriceCacheChange.listen((skuPriceChanges) async {
-      Map<Snowflake, Map<TcgPlayerAlertAction, SkuPriceCacheChange>> skuPriceChangeByAlertByOwnerId = {};
-      for (var entry in skuPriceChanges.entries) {
-        var alerts = _skuIdSet.getAlertsBySkuId(entry.key).where((alertAction) {
-          return ((entry.value.after.skuPrice.lowestListingPrice ?? double.infinity) < (entry.value.before?.skuPrice.lowestListingPrice ?? double.infinity)) &&
-              ((entry.value.after.skuPrice.lowestListingPrice ?? double.infinity) <= (alertAction.maxPrice ?? double.infinity));
-        }).toList();
+  Future<void> _checkSkuPriceCacheChange(Map<int, SkuPriceCache> skuPriceCache) async {
+    // Initial load from storage to reduce noise on startup
+    if (_previousSkuPrices.isEmpty && skuPriceCache.isNotEmpty) {
+      _previousSkuPrices.addAll({
+        for (var skuPriceCache in await _previousSkuPriceStorageRepository.getAll()) skuPriceCache.skuPrice.skuId: skuPriceCache,
+      });
+    }
 
-        for (var alert in alerts) {
-          skuPriceChangeByAlertByOwnerId.update(alert.ownerId, (value) => value..addAll({alert: entry.value}), ifAbsent: () => {alert: entry.value});
-        }
+    // Build Changes
+    var skuPriceChanges = skuPriceCache.map<int, _SkuPriceCacheChange>(
+      (key, value) => MapEntry(
+        key,
+        _SkuPriceCacheChange(
+          before: _previousSkuPrices[key],
+          after: value,
+        ),
+      ),
+    );
+
+    Map<Snowflake, Map<TcgPlayerAlertAction, _SkuPriceCacheChange>> skuPriceChangeByAlertByOwnerId = {};
+    for (var entry in skuPriceChanges.entries) {
+      var alerts = _skuIdSet.getAlertsBySkuId(entry.key).where((alertAction) {
+        return ((entry.value.after.skuPrice.lowestListingPrice ?? double.infinity) < (entry.value.before?.skuPrice.lowestListingPrice ?? double.infinity)) &&
+            ((entry.value.after.skuPrice.lowestListingPrice ?? double.infinity) <= (alertAction.maxPrice ?? double.infinity));
+      }).toList();
+
+      for (var alert in alerts) {
+        skuPriceChangeByAlertByOwnerId.update(alert.ownerId, (value) => value..addAll({alert: entry.value}), ifAbsent: () => {alert: entry.value});
       }
+    }
 
-      for (var ownerIdAndSkuPriceChangeByAlert in skuPriceChangeByAlertByOwnerId.entries) {
-        var message = MessageBuilder();
-        message.embeds = (await ownerIdAndSkuPriceChangeByAlert.value.entries.map((alertAndSkuPriceChange) async {
-          return _buildProductEmbed(
-            product: (await _tcgPlayerService.searchProductsBySkuId(skuId: alertAndSkuPriceChange.key.skuId)).first.wrap(_tcgPlayerService),
-            maxPrice: alertAndSkuPriceChange.key.maxPrice,
-            skuPriceChange: alertAndSkuPriceChange.value,
-            botColor: botColor,
-          );
-        }).waitAll())
-            .toList();
+    for (var ownerIdAndSkuPriceChangeByAlert in skuPriceChangeByAlertByOwnerId.entries) {
+      var message = MessageBuilder();
+      message.embeds = (await ownerIdAndSkuPriceChangeByAlert.value.entries.map((alertAndSkuPriceChange) async {
+        return _buildProductEmbed(
+          product: (await _tcgPlayerService.searchProductsBySkuId(skuId: alertAndSkuPriceChange.key.skuId)).first,
+          maxPrice: alertAndSkuPriceChange.key.maxPrice,
+          skuPriceChange: alertAndSkuPriceChange.value,
+          botColor: botColor,
+        );
+      }).waitAll())
+          .toList();
 
-        (await bot.fetchUser(ownerIdAndSkuPriceChangeByAlert.key)).sendMessage(message);
-      }
-    });
+      (await bot.fetchUser(ownerIdAndSkuPriceChangeByAlert.key)).sendMessage(message);
+    }
   }
 
   EmbedBuilder _buildProductEmbed(
-      {required ProductWrapper product, required SkuPriceCacheChange skuPriceChange, required num? maxPrice, required DiscordColor? botColor}) {
-    SkuWrapper sku = product.skus.firstWhere((element) => element.skuId == skuPriceChange.after.skuPrice.skuId);
+      {required ProductModel product, required _SkuPriceCacheChange skuPriceChange, required num? maxPrice, required DiscordColor? botColor}) {
+    SkuModel sku = product.skus.firstWhere((element) => element.skuId == skuPriceChange.after.skuPrice.skuId);
 
     EmbedBuilder embedBuilder = EmbedBuilder()
       ..color = botColor
@@ -91,7 +114,7 @@ class TcgPlayerAlertActionService extends ActionService<TcgPlayerAlertAction> {
       ..title = "${product.name}"
       ..url = product.url.toDiscordString()
       ..imageUrl = product.imageUrl.toDiscordString()
-      ..description = MessageDecoration.bold.format("${sku.condition.name}\n${sku.printing.name}")
+      ..description = MessageDecoration.bold.format("${sku.condition?.name}\n${sku.printing.name}")
       ..fields = [
         EmbedFieldBuilder(
           "Lowest Listing",
@@ -119,9 +142,6 @@ class TcgPlayerAlertActionService extends ActionService<TcgPlayerAlertAction> {
   }
 
   @override
-  String getName() => "TcgPlayerAlertAction";
-
-  @override
   void bootAction(TcgPlayerAlertAction? action) {
     if (action == null) return;
     _skuIdSet.addAlert(action);
@@ -132,6 +152,13 @@ class TcgPlayerAlertActionService extends ActionService<TcgPlayerAlertAction> {
     if (action == null) return;
     _skuIdSet.removeAlert(action);
   }
+}
+
+class _SkuPriceCacheChange {
+  SkuPriceCache? before;
+  SkuPriceCache after;
+
+  _SkuPriceCacheChange({required this.before, required this.after});
 }
 
 class _SkuIdQueue {

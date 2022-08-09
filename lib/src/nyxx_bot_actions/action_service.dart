@@ -1,29 +1,25 @@
 import 'dart:async';
 import 'dart:collection';
-import 'dart:convert';
-import 'dart:io';
 
-import 'package:cardboard_bot/src/google_cloud_services/google_cloud_service.dart';
+import 'package:cardboard_bot/repository.dart';
 import 'package:nyxx/nyxx.dart';
 
 import 'action.dart';
 
 abstract class ActionService<A extends Action> {
-  final JsonEncoder _jsonEncoder = JsonEncoder.withIndent("  ");
   Map<int, SplayTreeMap<String, A>> _actionStoreCache = {};
   INyxxWebsocket bot;
+  final Repository<A> _repository;
 
-  ActionService(this.bot);
-
-  String getName();
+  ActionService(this.bot, this._repository) {
+    _boot();
+  }
 
   void bootAction(A? action);
 
   void shutdownAction(A? action);
 
   A actionFromJson(Map<String, dynamic> json);
-
-  String getFileName() => getName();
 
   Future<A> upsert(A newAction) async {
     //Update Store
@@ -47,8 +43,7 @@ abstract class ActionService<A extends Action> {
     bootAction(newAction);
 
     //Update Persisted Storage
-    // await _persistToStorage();
-    await _persistToCloudStorage();
+    await _repository.upsert(objects: [newAction], ids: [newAction.getId()]);
     return newAction;
   }
 
@@ -60,8 +55,7 @@ abstract class ActionService<A extends Action> {
     shutdownAction(action);
 
     //Update Persisted Storage
-    // if (action != null) await _persistToStorage();
-    if (action != null) await _persistToCloudStorage();
+    if (action != null) await _repository.upsert(objects: [action], ids: [action.getId()]);
     return action;
   }
 
@@ -74,62 +68,12 @@ abstract class ActionService<A extends Action> {
         .toList();
   }
 
-  Future<ActionService<A>> boot() async {
-    // await _loadFromStorage();
-    await _readFromCloudStorage();
-    getActions().forEach((action) {
-      shutdownAction(action);
-      bootAction(action);
-    });
-    return this;
-  }
+  Future<ActionService<A>> _boot() async {
+    // Get actions from repository
+    var actions = await _repository.getAll();
 
-  Future<void> _readFromCloudStorage() async {
-    List<A>? actions = await GoogleCloudService().readList<A>(
-      fromJson: (dynamic d) => actionFromJson(d as Map<String, dynamic>),
-      name: getFileName(),
-    );
-    _actionStoreCache = actions == null
-        ? {}
-        : {
-            for (var ownerIdString in actions.map<int>((e) => e.ownerId.id).toSet())
-              ownerIdString: SplayTreeMap.from(
-                {
-                  for (var action in actions.where((A element) => element.ownerId.id == ownerIdString)) action.getId(): action,
-                },
-              )
-          };
-  }
-
-  Future<void> _persistToCloudStorage() async {
-    await GoogleCloudService().write(
-      name: getFileName(),
-      object: _actionStoreCache.values.expand<A>((element) => element.values).toList(),
-    );
-  }
-
-  Future<void> _persistToStorage() async {
-    var file = await File('cardboard_bot/data/actions/${getFileName()}.json').create(recursive: true);
-    await file.writeAsString(_encode(_actionStoreCache));
-  }
-
-  Future<void> _loadFromStorage() async {
-    var file = File('cardboard_bot/data/actions/${getFileName()}.json');
-    if (await file.exists()) {
-      _actionStoreCache = _decode(await file.readAsString());
-    } else {
-      _actionStoreCache = <int, SplayTreeMap<String, A>>{};
-    }
-  }
-
-  Map<int, SplayTreeMap<String, A>> _decode(String string) {
-    List<A> actions = (json.decode(string) as List)
-        .cast<Map<String, dynamic>>()
-        .map<A>(
-          (e) => actionFromJson(e),
-        )
-        .toList();
-    return {
+    // create fast cache
+    _actionStoreCache = {
       for (var ownerIdString in actions.map<int>((e) => e.ownerId.id).toSet())
         ownerIdString: SplayTreeMap.from(
           {
@@ -137,15 +81,11 @@ abstract class ActionService<A extends Action> {
           },
         )
     };
-  }
 
-  String _encode(Map<int, SplayTreeMap<String, A>> map) {
-    return _jsonEncoder.convert(
-      map.values
-          .expand(
-            (element) => element.values,
-          )
-          .toList(),
-    );
+    getActions().forEach((action) {
+      shutdownAction(action);
+      bootAction(action);
+    });
+    return this;
   }
 }

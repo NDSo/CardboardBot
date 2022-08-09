@@ -1,10 +1,10 @@
 import 'package:cardboard_bot/tcgplayer_client.dart';
 import 'package:json_annotation/json_annotation.dart';
 
-part 'category_group_cache.g.dart';
+part 'category_info_cache.g.dart';
 
 @JsonSerializable(ignoreUnannotated: true)
-class CategoryGroupCache {
+class CategoryInfoCache {
   static String _timeStampToJson(DateTime ts) => ts.toUtc().toIso8601String();
   @JsonKey(toJson: _timeStampToJson)
   final DateTime timestamp;
@@ -26,7 +26,7 @@ class CategoryGroupCache {
   final Map<int, int> productIdBySkuId;
   final Map<int, int> groupIdByProductId;
 
-  CategoryGroupCache({
+  CategoryInfoCache({
     required this.timestamp,
     required this.categoryList,
     required this.groupList,
@@ -55,7 +55,7 @@ class CategoryGroupCache {
             )),
         );
 
-  CategoryGroupCache.empty()
+  CategoryInfoCache.empty()
       : timestamp = DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
         categoryList = [],
         conditionsByCategoryId = {},
@@ -68,7 +68,11 @@ class CategoryGroupCache {
         groupIdByProductId = {},
         skuIdByProductIdByGroupId = {};
 
-  factory CategoryGroupCache.fromJson(Map<String, dynamic> json) => _$CategoryGroupCacheFromJson(json);
+  factory CategoryInfoCache.fromJson(Map<String, dynamic> json) => _$CategoryInfoCacheFromJson(json);
 
-  Map<String, dynamic> toJson() => _$CategoryGroupCacheToJson(this);
+  Map<String, dynamic> toJson() => _$CategoryInfoCacheToJson(this);
+
+  String getId() => buildId();
+
+  static String buildId() => "CategoryInfoCache";
 }

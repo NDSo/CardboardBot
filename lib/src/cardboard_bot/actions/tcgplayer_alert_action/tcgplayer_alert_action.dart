@@ -6,7 +6,6 @@ part 'tcgplayer_alert_action.g.dart';
 
 @JsonSerializable(ignoreUnannotated: true, constructor: "_")
 class TcgPlayerAlertAction extends Action {
-
   @JsonKey()
   final int skuId;
   @JsonKey()

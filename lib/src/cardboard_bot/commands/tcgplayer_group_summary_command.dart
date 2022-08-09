@@ -40,8 +40,7 @@ class TcgPlayerGroupSummaryCommand extends CommandOptionBuilder {
     switch (event.focusedOption.name) {
       case _categoryArg:
         return event.respond(
-          tcgPlayerService
-              .searchCategories(anyName: RegExp("${event.focusedOption.value}", caseSensitive: false))
+          (await tcgPlayerService.searchCategories(anyName: RegExp("${event.focusedOption.value}", caseSensitive: false)))
               .toSet()
               .sorted((a, b) => a.name.compareTo(b.name))
               .sorted((b, a) => a.popularity.compareTo(b.popularity))
@@ -51,11 +50,10 @@ class TcgPlayerGroupSummaryCommand extends CommandOptionBuilder {
         );
       case _groupArg:
         return event.respond(
-          tcgPlayerService
-              .searchGroups(
-                categoryId: int.parse(event.options.where((element) => element.name == _categoryArg).first.value as String),
-                name: RegExp("${event.focusedOption.value}", caseSensitive: false),
-              )
+          (await tcgPlayerService.searchGroups(
+            categoryId: int.parse(event.options.where((element) => element.name == _categoryArg).first.value as String),
+            name: RegExp("${event.focusedOption.value}", caseSensitive: false),
+          ))
               .toSet()
               .sorted((b, a) => a.publishedOn.compareTo(b.publishedOn))
               .map((e) => ArgChoiceBuilder(e.name.substringSafe(0, 100), e.groupId.toString()))
@@ -70,22 +68,20 @@ class TcgPlayerGroupSummaryCommand extends CommandOptionBuilder {
     int categoryId = int.parse(context.getArg(_categoryArg).value as String);
     int groupId = int.parse(context.getArg(_groupArg).value as String);
 
-    Category category = tcgPlayerService.searchCategories(categoryId: categoryId).first;
-    Group group = tcgPlayerService.searchGroups(groupId: groupId).first;
+    Category category = (await tcgPlayerService.searchCategories(categoryId: categoryId)).first;
+    Group group = (await tcgPlayerService.searchGroups(groupId: groupId)).first;
 
-    List<ProductWrapper> products = (await tcgPlayerService
-        .searchProductsByGroupId(groupId: groupId))
-        .map((e) => e.wrap(tcgPlayerService))
+    List<ProductModel> products = (await tcgPlayerService.searchProductsByGroupId(groupId: groupId))
         .where((product) => product.extendedData.any((extendedData) => RegExp("rarity", caseSensitive: false).hasMatch(extendedData.name)))
         .toList();
     Map<int, SkuPriceCache> skuPrices =
-        await tcgPlayerService.getSkuPriceCache(skuIds: products.expand((product) => product.skus.map((sku) => sku.skuId)).toList());
+        await tcgPlayerService.searchSkuPriceCachesBySkuIds(skuIds: products.expand((product) => product.skus.map((sku) => sku.skuId)).toList());
 
     Set<Printing> printings = products.expand((product) => product.skus.map((sku) => sku.printing)).toSet();
 
-    Map<Printing, Map<String?, List<ProductWrapper>>> productsByRarityByPrinting = {
+    Map<Printing, Map<String?, List<ProductModel>>> productsByRarityByPrinting = {
       for (var printing in printings)
-        printing: products.where((product) => product.skus.any((sku) => sku.printing == printing)).fold<Map<String?, List<ProductWrapper>>>(
+        printing: products.where((product) => product.skus.any((sku) => sku.printing == printing)).fold<Map<String?, List<ProductModel>>>(
           {},
           (productsByRarity, product) => productsByRarity
             ..update(
@@ -109,7 +105,7 @@ class TcgPlayerGroupSummaryCommand extends CommandOptionBuilder {
             products
                 .map<num?>(
                   (product) => product.skus
-                      .where((sku) => RegExp("mint", caseSensitive: false).hasMatch(sku.condition.name) && sku.printing == printing)
+                      .where((sku) => RegExp("mint", caseSensitive: false).hasMatch(sku.condition?.name ?? "") && sku.printing == printing)
                       // .map((sku) {
                       //   String price = "${sku.skuId}: ${skuPrices.get(sku.skuId)?.skuPrice.lowPrice} ${skuPrices.get(sku.skuId)?.skuPrice.marketPrice}";
                       //   if (rarity == "Rare") _logger.info(price);

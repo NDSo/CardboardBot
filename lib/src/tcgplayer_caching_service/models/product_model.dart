@@ -1,31 +1,19 @@
 import 'package:cardboard_bot/tcgplayer_client.dart';
+import 'sku_model.dart';
 
-import '../tcgplayer_caching_client.dart';
-import 'sku_wrapper.dart';
-
-extension ProductExtendedWrapperExtension on ProductExtended {
-  ProductWrapper wrap(TcgPlayerCachingClient tcgPlayerCachingClient) => ProductWrapper(this, tcgPlayerCachingClient);
-}
-
-class ProductWrapper implements ProductExtended {
+class ProductModel implements ProductExtended {
   final ProductExtended _productExtended;
-
-  ProductWrapper(ProductExtended product, TcgPlayerCachingClient tcgPlayerService)
-      : _productExtended = product,
-        cachedOn = tcgPlayerService.productCacheTimestamp,
-        category = tcgPlayerService
-            .searchCategories(
-          categoryId: product.categoryId,
-        )
-            .first,
-        group = tcgPlayerService.searchGroups(groupId: product.groupId).first,
-        skus = product.skus.map((sku) => SkuWrapper(sku, product, tcgPlayerService)).toList();
-
-  final DateTime cachedOn;
   final Category category;
   final Group group;
   @override
-  final List<SkuWrapper> skus;
+  final List<SkuModel> skus;
+
+  ProductModel(
+    this._productExtended, {
+    required this.category,
+    required this.group,
+    required this.skus,
+  });
 
   @override
   int get categoryId => _productExtended.categoryId;
@@ -64,5 +52,5 @@ class ProductWrapper implements ProductExtended {
   bool matchAnyName(RegExp regExp) => _productExtended.matchAnyName(regExp);
 
   @override
-  Map<String, dynamic> toJson() => throw UnimplementedError("$runtimeType.toJson() is not implemented!");
+  Map<String, dynamic> toJson() => throw UnimplementedError("$ProductModel.toJson() is not implemented!");
 }

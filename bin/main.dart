@@ -1,16 +1,30 @@
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:args/args.dart';
 import 'package:cardboard_bot/cardboard_bot.dart';
-import 'package:cardboard_bot/src/google_cloud_services/google_cloud_service.dart';
+import 'package:cardboard_bot/repository.dart';
+import 'package:cardboard_bot/src/cardboard_bot/actions/tcgplayer_alert_action/tcgplayer_alert_action.dart';
+import 'package:cardboard_bot/src/cardboard_bot/actions/tcgplayer_alert_action/tcgplayer_alert_action_service.dart';
+import 'package:cardboard_bot/src/tcgplayer_caching_service/models/product_info_cache.dart';
+import 'package:cardboard_bot/src/tcgplayer_caching_service/services/price_cache_service.dart';
+import 'package:cardboard_bot/src/tcgplayer_caching_service/services/product_cache_service.dart';
 import 'package:cardboard_bot/tcgplayer_caching_service.dart';
 import 'package:cardboard_bot/tcgplayer_client.dart';
-import 'package:googleapis/compute/v1.dart' as gce;
+import 'package:googleapis/compute/v1.dart' as compute show ComputeApi;
+import 'package:googleapis/firestore/v1.dart' as firestore show FirestoreApi;
+import 'package:googleapis/storage/v1.dart' as storage show StorageApi;
+import 'package:kiwi/kiwi.dart';
 import 'package:logging/logging.dart';
 import 'package:nyxx/nyxx.dart';
 import 'package:nyxx_interactions/nyxx_interactions.dart';
 import 'package:yaml/yaml.dart';
 
-void main() async {
+import 'google_cloud_initializer.dart';
+import 'nyxx_config.dart';
+import 'tcgplayer_api_config.dart';
+
+void main(List<String> arguments) async {
 // ignore: unused_local_variable
   final Logger logger = Logger("main");
   Logger.root.onRecord.listen((LogRecord rec) {
@@ -19,56 +33,123 @@ void main() async {
     if (rec.stackTrace != null && (rec.level == Level.SEVERE || rec.level == Level.SHOUT)) print("${rec.stackTrace?.toString()}");
   });
 
-  // TODO: make enableGoogleCloud a cli argument
-  await initialize(enableGoogleCloud: true);
+  String? googleCloudProjectId;
+  var argParser = ArgParser()..addOption("google_cloud_project_id", callback: (value) => googleCloudProjectId = value);
+  var argResults = argParser.parse(arguments);
+
+  await initialize(googleCloudProjectId: googleCloudProjectId);
 }
 
-Future<void> initialize({required bool enableGoogleCloud}) async {
+Future<void> initialize({String? googleCloudProjectId}) async {
   // ignore: unused_local_variable
   final Logger logger = Logger("initialize");
 
   ///////////////
   // Setup Infrastructure Cloud Api
   ///////////////
-  if (enableGoogleCloud) {
-    // TODO: There is probably a better google api for getting the projectId that owns the service account
-    var googleCloudProjectId = "cardboardbot-f4c69";
-    var googleConfigFile = File("cardboard_bot/configs/googleapis_service_account.json");
-    if (googleConfigFile.existsSync()) {
-      // Local Environment
-      await GoogleCloudService.initialize(projectId: googleCloudProjectId, serviceAccountCredentials: googleConfigFile.readAsStringSync());
-    } else {
-      // Cloud Environment
-      await GoogleCloudService.initialize(projectId: googleCloudProjectId);
-    }
-  }
+  if (googleCloudProjectId != null) {
+    // Initialize cloud clients
+    await GoogleCloudInitializer.initialize(projectId: googleCloudProjectId);
 
-  ///////////////
-  // Get App Configs
-  ///////////////
-  NyxxConfig nyxxConfig;
-  TcgPlayerApiConfig tcgPlayerApiConfig;
+    // Get keys from compute metadata
+    // TODO Move TO GOOGLE SECRETS
+    var metadata = (await KiwiContainer().resolve<compute.ComputeApi>().projects.get(googleCloudProjectId)).commonInstanceMetadata!;
+    KiwiContainer().registerInstance(NyxxConfig.fromMetadata(metadata));
+    KiwiContainer().registerInstance(TcgPlayerApiConfig.fromMetadata(metadata));
 
-  var localAppConfigFile = File("cardboard_bot/configs/app_config.yaml");
+    // Register Storage Layer
+    KiwiContainer().registerSingleton<Repository<CategoryInfoCache>>((container) => CloudStorageRepository<CategoryInfoCache>(
+          objectFromJson: CategoryInfoCache.fromJson,
+          compressionCodec: Utf8Codec().fuse(GZipCodec()),
+          storageApi: container.resolve<storage.StorageApi>(),
+          googleProjectId: googleCloudProjectId,
+          documentName: "TcgPlayerProductCache",
+        ));
 
-  if (localAppConfigFile.existsSync()) {
-    var yamlDocument = loadYamlDocument(localAppConfigFile.readAsStringSync());
-    nyxxConfig = NyxxConfig.fromYaml(yamlDocument);
-    tcgPlayerApiConfig = TcgPlayerApiConfig.fromYaml(yamlDocument);
-  } else if (enableGoogleCloud) {
-    var metadata = (await GoogleCloudService().getComputeEngineMetadata())!;
-    nyxxConfig = NyxxConfig.fromMetadata(metadata);
-    tcgPlayerApiConfig = TcgPlayerApiConfig.fromMetadata(metadata);
+    KiwiContainer().registerSingleton<Repository<ProductInfoCache>>((container) => FirestoreRepository<ProductInfoCache>(
+          objectFromJson: ProductInfoCache.fromJson,
+          compressionCodec: Utf8Codec().fuse(GZipCodec()).fuse(Base64Codec()),
+          firestoreApi: container.resolve<firestore.FirestoreApi>(),
+          googleProjectId: googleCloudProjectId,
+          collectionId: "productsByGroup",
+        ));
+
+    KiwiContainer().registerSingleton<Repository<TcgPlayerAlertAction>>((container) => CloudStorageRepository<TcgPlayerAlertAction>(
+          objectFromJson: TcgPlayerAlertAction.fromJson,
+          compressionCodec: Utf8Codec(),
+          storageApi: container.resolve<storage.StorageApi>(),
+          googleProjectId: googleCloudProjectId,
+          documentName: "TcgplayerAlertAction",
+        ));
+
+    KiwiContainer().registerSingleton<Repository<SkuPriceCache>>((container) => CloudStorageRepository<SkuPriceCache>(
+          objectFromJson: SkuPriceCache.fromJson,
+          compressionCodec: Utf8Codec().fuse(GZipCodec()),
+          storageApi: container.resolve<storage.StorageApi>(),
+          googleProjectId: googleCloudProjectId,
+          documentName: "TcgplayerSkuPriceCache",
+        ));
+
+    KiwiContainer().registerSingleton((container) => TcgPlayerCachingClient(
+          ProductCacheServiceLowMemory(
+            productInfoCacheLifespan: const Duration(seconds: 10),
+            inclusionRules: [
+              InclusionRule(categoryMatch: RegExp(".+", caseSensitive: false)),
+            ],
+            tier2CategoryInfoCacheRepository: container.resolve<Repository<CategoryInfoCache>>(),
+            tier2ProductInfoCacheRepository: container.resolve<Repository<ProductInfoCache>>(),
+          ),
+          PriceCacheService(),
+        ));
   } else {
-    throw Exception("There needs to be at least one provider of app_config!");
-  }
+    // Get Keys from Local Files
+    var localAppConfigFile = File("cardboard_bot/configs/app_config.yaml");
+    var yamlDocument = loadYamlDocument(localAppConfigFile.readAsStringSync());
+    KiwiContainer().registerInstance(NyxxConfig.fromYaml(yamlDocument));
+    KiwiContainer().registerInstance(TcgPlayerApiConfig.fromYaml(yamlDocument));
 
+    // Register Storage Layer
+    KiwiContainer().registerSingleton<Repository<CategoryInfoCache>>((container) => LocalFileRepository<CategoryInfoCache>(
+          objectFromJson: CategoryInfoCache.fromJson,
+          compressionCodec: Utf8Codec().fuse(GZipCodec()),
+          filePath: "cardboard_bot/data/tcgplayer/category_info_cache.gzip",
+        ));
+
+    KiwiContainer().registerSingleton<Repository<ProductInfoCache>>((container) => LocalFileRepository<ProductInfoCache>(
+          objectFromJson: ProductInfoCache.fromJson,
+          compressionCodec: Utf8Codec().fuse(GZipCodec()),
+          filePath: "cardboard_bot/data/tcgplayer/product_info_cache.gzip",
+        ));
+
+    KiwiContainer().registerSingleton<Repository<TcgPlayerAlertAction>>((container) => LocalFileRepository<TcgPlayerAlertAction>(
+          objectFromJson: TcgPlayerAlertAction.fromJson,
+          compressionCodec: Utf8Codec().fuse(GZipCodec()),
+          filePath: "cardboard_bot/data/actions/tcgplayer_alert.gzip",
+        ));
+
+    KiwiContainer().registerSingleton<Repository<SkuPriceCache>>((container) => LocalFileRepository<SkuPriceCache>(
+          objectFromJson: SkuPriceCache.fromJson,
+          compressionCodec: Utf8Codec().fuse(GZipCodec()),
+          filePath: "cardboard_bot/data/tcgplayer/price_cache.gzip",
+        ));
+
+    KiwiContainer().registerSingleton((container) => TcgPlayerCachingClient(
+          ProductCacheServiceHighMemory(
+            inclusionRules: [
+              InclusionRule(categoryMatch: RegExp(".+", caseSensitive: false)),
+            ],
+            tier2CategoryInfoCacheRepository: container.resolve<Repository<CategoryInfoCache>>(),
+            tier2ProductInfoCacheRepository: container.resolve<Repository<ProductInfoCache>>(),
+          ),
+          PriceCacheService(),
+        ));
+  }
 
   ///////////////
   // Setup Nyxx Bot
   ////////////////
   INyxxWebsocket bot = NyxxFactory.createNyxxWebsocket(
-    nyxxConfig.token,
+    KiwiContainer().resolve<NyxxConfig>().token,
     CardboardBot.intents,
   )
     ..registerPlugin(IgnoreExceptions())
@@ -83,86 +164,24 @@ Future<void> initialize({required bool enableGoogleCloud}) async {
   // Setup CardboardBot
   //////////////////////////
   initializeTcgPlayerClient(
-    publicKey: tcgPlayerApiConfig.publicKey,
-    privateKey: tcgPlayerApiConfig.privateKey,
+    publicKey: KiwiContainer().resolve<TcgPlayerApiConfig>().publicKey,
+    privateKey: KiwiContainer().resolve<TcgPlayerApiConfig>().privateKey,
   );
 
-  //TODO: Consider abstracting out persistence with a provider.
-  TcgPlayerCachingClient tcgPlayerService = await TcgPlayerCachingClient.initialize([
-    InclusionRule(categoryMatch: RegExp(".+", caseSensitive: false)),
-    // InclusionRule(categoryMatch: RegExp("pokemon", caseSensitive: false)),
-    // InclusionRule(categoryMatch: RegExp("flesh and blood", caseSensitive: false)),
-    // InclusionRule(categoryMatch: RegExp("final fantasy", caseSensitive: false)),
-    // InclusionRule(categoryMatch: RegExp("weiss schwarz", caseSensitive: false)),
-    // InclusionRule(categoryMatch: RegExp("YuGiOh", caseSensitive: false)),
-    // InclusionRule(categoryMatch: RegExp("Cardfight Vanguard", caseSensitive: false)),
-    // InclusionRule(categoryMatch: RegExp("Digimon", caseSensitive: false)),
-    // InclusionRule(categoryMatch: RegExp("Dragon Ball", caseSensitive: false)),
-    // InclusionRule(categoryMatch: RegExp("Force of Will", caseSensitive: false)),
-    // InclusionRule(categoryMatch: RegExp("Future Card BuddyFight", caseSensitive: false)),
-    // // MTG is the gigabyte problem
-    // InclusionRule(categoryMatch: RegExp("Magic the Gathering", caseSensitive: false)),
-    // InclusionRule(categoryMatch: RegExp("MetaZoo", caseSensitive: false)),
-    // InclusionRule(categoryMatch: RegExp("My Little Pony", caseSensitive: false)),
-    // InclusionRule(categoryMatch: RegExp("Star Wars Destiny", caseSensitive: false)),
-    // InclusionRule(categoryMatch: RegExp("WoW", caseSensitive: false)),
-  ]);
-
-  //TODO: Consider abstracting out the persistence with a provider.
   await CardboardBot.boot(
     bot: bot,
     interactions: interactions,
-    tcgPlayerService: tcgPlayerService,
+    tcgPlayerService: KiwiContainer().resolve<TcgPlayerCachingClient>(),
+    tcgPlayerAlertActionService: TcgPlayerAlertActionService(
+      bot,
+      KiwiContainer().resolve<Repository<TcgPlayerAlertAction>>(),
+      KiwiContainer().resolve<TcgPlayerCachingClient>(),
+      KiwiContainer().resolve<Repository<SkuPriceCache>>(),
+    ),
   );
 
   ///////////////////////
   // Sync Interactions
   ///////////////////////
   interactions.sync();
-}
-
-class NyxxConfig {
-  final String token;
-
-  NyxxConfig(
-    this.token,
-  );
-
-  factory NyxxConfig.fromYaml(YamlDocument yaml) {
-    dynamic node = yaml.contents.value["discordBot"];
-    return NyxxConfig(
-      node["token"] as String,
-    );
-  }
-
-  factory NyxxConfig.fromMetadata(gce.Metadata metadata) {
-    return NyxxConfig(
-      metadata.items!.firstWhere((element) => element.key == "discord_bot_token").value!
-    );
-  }
-}
-
-class TcgPlayerApiConfig {
-  final String publicKey;
-  final String privateKey;
-
-  TcgPlayerApiConfig(
-    this.publicKey,
-    this.privateKey,
-  );
-
-  factory TcgPlayerApiConfig.fromYaml(YamlDocument yaml) {
-    dynamic node = yaml.contents.value["tcgPlayerApi"];
-    return TcgPlayerApiConfig(
-      node["publicKey"] as String,
-      node["privateKey"] as String,
-    );
-  }
-
-  factory TcgPlayerApiConfig.fromMetadata(gce.Metadata metadata) {
-    return TcgPlayerApiConfig(
-      metadata.items!.firstWhere((element) => element.key == "tcgplayer_public_key").value!,
-      metadata.items!.firstWhere((element) => element.key == "tcgplayer_private_key").value!,
-    );
-  }
 }

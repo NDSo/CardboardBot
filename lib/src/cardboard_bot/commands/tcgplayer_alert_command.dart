@@ -1,13 +1,11 @@
-import 'package:cardboard_bot/tcgplayer_client.dart';
+import 'package:cardboard_bot/extensions.dart';
 import 'package:cardboard_bot/tcgplayer_caching_service.dart';
+import 'package:logging/logging.dart';
 import 'package:nyxx/nyxx.dart';
 import 'package:nyxx_interactions/nyxx_interactions.dart';
-import 'package:logging/logging.dart';
-import 'package:cardboard_bot/extensions.dart';
 
-import '../actions/tcgplayer_alert_action.dart';
-import '../actions/tcgplayer_alert_action_service.dart';
-import '../config/constants.dart';
+import '../actions/tcgplayer_alert_action/tcgplayer_alert_action.dart';
+import '../actions/tcgplayer_alert_action/tcgplayer_alert_action_service.dart';
 
 class TcgPlayerAlertCommand extends CommandOptionBuilder {
   // ignore: unused_field
@@ -77,8 +75,7 @@ class TcgPlayerAlertCommand extends CommandOptionBuilder {
     switch (event.focusedOption.name) {
       case _categoryArg:
         return event.respond(
-          tcgPlayerService
-              .searchCategories(anyName: RegExp("${event.focusedOption.value}", caseSensitive: false))
+          (await tcgPlayerService.searchCategories(anyName: RegExp("${event.focusedOption.value}", caseSensitive: false)))
               .toSet()
               .sorted((a, b) => a.name.compareTo(b.name))
               .sorted((b, a) => a.popularity.compareTo(b.popularity))
@@ -88,11 +85,10 @@ class TcgPlayerAlertCommand extends CommandOptionBuilder {
         );
       case _groupArg:
         return event.respond(
-          tcgPlayerService
-              .searchGroups(
-                categoryId: int.parse(event.options.where((element) => element.name == _categoryArg).first.value as String),
-                name: RegExp("${event.focusedOption.value}", caseSensitive: false),
-              )
+          (await tcgPlayerService.searchGroups(
+            categoryId: int.parse(event.options.where((element) => element.name == _categoryArg).first.value as String),
+            name: RegExp("${event.focusedOption.value}", caseSensitive: false),
+          ))
               .toSet()
               .sorted((b, a) => a.publishedOn.compareTo(b.publishedOn))
               .map((e) => ArgChoiceBuilder(e.name.substringSafe(0, 100), e.groupId.toString()))
@@ -108,9 +104,7 @@ class TcgPlayerAlertCommand extends CommandOptionBuilder {
             .sorted((a, b) => a.name.compareTo(b.name))
             .expand(
               (product) => product.skus.map((sku) {
-                Printing printing = tcgPlayerService.searchPrintings(categoryId: product.categoryId, printingId: sku.printingId).first;
-                Condition condition = tcgPlayerService.searchConditions(categoryId: product.categoryId, conditionId: sku.conditionId).first;
-                return ArgChoiceBuilder("${product.name} | ${printing.name} | ${condition.name}".substringSafe(0, 100), sku.skuId.toString());
+                return ArgChoiceBuilder("${product.name} | ${sku.printing.name} | ${sku.condition?.name}".substringSafe(0, 100), sku.skuId.toString());
               }),
             )
             .toList()
@@ -127,12 +121,10 @@ class TcgPlayerAlertCommand extends CommandOptionBuilder {
       case _skuArg:
         return event.respond(
           (await tcgPlayerAlertActionService.getActions(ownerId: event.interaction.userAuthor!.id).map((action) async {
-            ProductExtended product = (await tcgPlayerService.searchProductsBySkuId(skuId: action.skuId)).first;
-            Sku sku = product.skus.firstWhere((element) => element.skuId == action.skuId);
-            Printing printing = tcgPlayerService.searchPrintings(categoryId: product.categoryId, printingId: sku.printingId).first;
-            Condition condition = tcgPlayerService.searchConditions(categoryId: product.categoryId, conditionId: sku.conditionId).first;
+            var product = (await tcgPlayerService.searchProductsBySkuId(skuId: action.skuId)).first;
+            var sku = product.skus.firstWhere((element) => element.skuId == action.skuId);
             return ArgChoiceBuilder(
-                "${product.name} | ${printing.name} | ${condition.name}${action.maxPrice == null ? "" : " | ${action.maxPrice?.toFormat(usdFormat)}"}"
+                "${product.name} | ${sku.printing.name} | ${sku.condition?.name}${action.maxPrice == null ? "" : " | ${action.maxPrice?.toFormat(usdFormat)}"}"
                     .substringSafe(0, 100),
                 action.getId());
           }).waitAll())
@@ -157,9 +149,9 @@ class TcgPlayerAlertCommand extends CommandOptionBuilder {
       skuId: skuId,
       maxPrice: maxPrice,
     ));
-    ProductWrapper productWrapper = (await tcgPlayerService.searchProductsBySkuId(skuId: skuId)).first.wrap(tcgPlayerService);
-    SkuWrapper skuWrapper = productWrapper.skus.firstWhere((element) => element.skuId == skuId);
-    String target = "${productWrapper.name} | ${skuWrapper.printing.name} | ${skuWrapper.condition.name}";
+    var product = (await tcgPlayerService.searchProductsBySkuId(skuId: skuId)).first;
+    var sku = product.skus.firstWhere((element) => element.skuId == skuId);
+    String target = "${product.name} | ${sku.printing.name} | ${sku.condition?.name}";
     await context.respond(
         MessageBuilder.content("Alerting for ${MessageDecoration.bold.format(maxPrice.toFormat(usdFormat))} ${MessageDecoration.codeSimple.format(target)}!"),
         hidden: true);

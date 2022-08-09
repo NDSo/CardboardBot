@@ -73,6 +73,9 @@ class TcgPlayerAlertActionService extends ActionService<TcgPlayerAlertAction> {
       ),
     );
 
+    // Update Previous
+    _previousSkuPrices.addAll(skuPriceCache);
+
     Map<Snowflake, Map<TcgPlayerAlertAction, _SkuPriceCacheChange>> skuPriceChangeByAlertByOwnerId = {};
     for (var entry in skuPriceChanges.entries) {
       var alerts = _skuIdSet.getAlertsBySkuId(entry.key).where((alertAction) {

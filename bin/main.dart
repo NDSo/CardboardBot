@@ -74,12 +74,12 @@ Future<void> initialize({String? googleCloudProjectId}) async {
           collectionId: "productsByGroup",
         ));
 
-    KiwiContainer().registerSingleton<Repository<TcgPlayerAlertAction>>((container) => CloudStorageRepository<TcgPlayerAlertAction>(
+    KiwiContainer().registerSingleton<Repository<TcgPlayerAlertAction>>((container) => FirestoreRepository<TcgPlayerAlertAction>(
           objectFromJson: TcgPlayerAlertAction.fromJson,
-          compressionCodec: Utf8Codec(),
-          storageApi: container.resolve<storage.StorageApi>(),
+          compressionCodec: null,
+          firestoreApi: container.resolve<firestore.FirestoreApi>(),
           googleProjectId: googleCloudProjectId,
-          documentName: "TcgplayerAlertAction",
+          collectionId: "tcgplayerAlertActions",
         ));
 
     KiwiContainer().registerSingleton<Repository<SkuPriceCache>>((container) => CloudStorageRepository<SkuPriceCache>(
@@ -87,7 +87,7 @@ Future<void> initialize({String? googleCloudProjectId}) async {
           compressionCodec: Utf8Codec().fuse(GZipCodec()),
           storageApi: container.resolve<storage.StorageApi>(),
           googleProjectId: googleCloudProjectId,
-          documentName: "TcgplayerSkuPriceCache",
+          documentName: "TcgPlayerSkuPriceCache",
         ));
 
     KiwiContainer().registerSingleton((container) => TcgPlayerCachingClient(

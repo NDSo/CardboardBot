@@ -7,7 +7,7 @@ import 'repository.dart';
 
 class FirestoreRepository<A> extends Repository<A> {
   final A Function(Map<String, dynamic> map) _objectFromJson;
-  final Codec<String, String> _compressionCodec;
+  final Codec<Object?, String> _codec;
   final firestore.FirestoreApi _firestoreApi;
   final String _googleProjectId;
   final String _collectionId;
@@ -24,23 +24,22 @@ class FirestoreRepository<A> extends Repository<A> {
 
   FirestoreRepository({
     required A Function(Map<String, dynamic> map) objectFromJson,
-    required Codec<String, String> compressionCodec,
+    required Codec<String, String>? compressionCodec,
     required firestore.FirestoreApi firestoreApi,
     required String googleProjectId,
     required String collectionId,
   })  : _objectFromJson = objectFromJson,
-        _compressionCodec = compressionCodec,
+        _codec = compressionCodec == null ? JsonCodec() : JsonCodec().fuse(compressionCodec),
         _firestoreApi = firestoreApi,
         _googleProjectId = googleProjectId,
         _collectionId = collectionId;
 
-
   A _objectFromFields(Map<String, firestore.Value> fields) {
-    return _objectFromJson(jsonDecode(_compressionCodec.decode(fields["object"]!.stringValue!)) as Map<String, dynamic>);
+    return _objectFromJson(_codec.decode(fields["object"]!.stringValue!) as Map<String, dynamic>);
   }
 
   Map<String, firestore.Value> _objectToFields(A object) {
-    return {"object": firestore.Value(stringValue: _compressionCodec.encode(jsonEncode(object)))};
+    return {"object": firestore.Value(stringValue: _codec.encode(object))};
   }
 
   @override

@@ -13,9 +13,10 @@ class TcgPlayerSearchCommand extends CommandOptionBuilder {
   // ignore: unused_field
   static final Logger _logger = Logger("TcgPlayerSearchCommand");
   static const String _nameArg = "name";
+  static const String _groupFilterArg = "group";
   static const String _categoryFilterArg = "category";
 
-  TcgPlayerSearchCommand({required TcgPlayerCachingService tcgPlayerService})
+  TcgPlayerSearchCommand({required TcgPlayerCachingClient tcgPlayerService})
       : super(
           CommandOptionType.subCommand,
           "search",
@@ -27,12 +28,29 @@ class TcgPlayerSearchCommand extends CommandOptionBuilder {
               "set category",
               required: true,
             )..registerAutocompleteHandler(
-                (p0) => p0.respond(
-                  tcgPlayerService //
-                      .searchCategories(anyName: RegExp(p0.focusedOption.value as String, caseSensitive: false))
-                      .map((e) => e.displayName.substringSafe(0, 100))
+                (p0) async => p0.respond(
+                  (await tcgPlayerService.searchCategories(anyName: RegExp(p0.focusedOption.value as String, caseSensitive: false)))
+                      .sorted((a, b) => a.name.compareTo(b.name))
+                      .sorted((b, a) => a.popularity.compareTo(b.popularity))
+                      .map((e) => ArgChoiceBuilder(e.displayName.substringSafe(0, 100), e.categoryId.toString()))
+                      .toList()
+                      .subListSafe(0, 25),
+                ),
+              ),
+            CommandOptionBuilder(
+              CommandOptionType.string,
+              _groupFilterArg,
+              "set group",
+              required: true,
+            )..registerAutocompleteHandler(
+                (event) async => event.respond(
+                  (await tcgPlayerService.searchGroups(
+                    categoryId: int.parse(event.options.where((element) => element.name == _categoryFilterArg).first.value as String),
+                    name: RegExp("${event.focusedOption.value}", caseSensitive: false),
+                  ))
                       .toSet()
-                      .map((e) => ArgChoiceBuilder(e, e))
+                      .sorted((b, a) => a.publishedOn.compareTo(b.publishedOn))
+                      .map((e) => ArgChoiceBuilder(e.name.substringSafe(0, 100), e.groupId.toString()))
                       .toList()
                       .subListSafe(0, 25),
                 ),
@@ -43,30 +61,17 @@ class TcgPlayerSearchCommand extends CommandOptionBuilder {
               "search name",
               required: true,
             )..registerAutocompleteHandler(
-                (p0) => p0.respond(
-                  tcgPlayerService //
-                      .searchProducts(
-                        categoryId: tcgPlayerService
-                            .searchCategories(
-                              displayName: RegExp(
-                                p0.options
-                                    .firstWhere(
-                                      (element) => element.name == _categoryFilterArg,
-                                    )
-                                    .value as String,
-                                caseSensitive: false,
-                              ),
-                            )
-                            .tryFirst()
-                            ?.categoryId,
-                        anyName: RegExp(".*${p0.focusedOption.value}.*", caseSensitive: false),
-                      )
+                (p0) async => p0.respond(
+                  (await tcgPlayerService //
+                          .searchProducts(
+                    groupId: int.parse(p0.options.where((element) => element.name == _groupFilterArg).first.value as String),
+                    anyName: RegExp(".*${p0.focusedOption.value}.*", caseSensitive: false),
+                  ))
                       .map((e) => e.name)
                       .toSet()
                       .toList()
                       .sorted((a, b) => a.compareTo(b))
-                      .sorted((a, b) => a.length.compareTo(b.length))
-                      .prependedBy([p0.focusedOption.value ?? ""])
+                      .prependedBy([p0.focusedOption.value as String? ?? ""])
                       .where((e) => e.isNotEmpty)
                       .map((e) => e.substringSafe(0, 100))
                       .map((name) => ArgChoiceBuilder(name, name))
@@ -84,26 +89,21 @@ class TcgPlayerSearchCommand extends CommandOptionBuilder {
     );
   }
 
-  static void _searchHandler({required ISlashCommandInteractionEvent context, required TcgPlayerCachingService tcgPlayerService}) async {
+  static void _searchHandler({required ISlashCommandInteractionEvent context, required TcgPlayerCachingClient tcgPlayerService}) async {
     await context.acknowledge();
 
-    String categoryString = context.getArg(_categoryFilterArg).value;
-    String searchString = context.getArg(_nameArg).value;
+    int groupId = int.parse(context.getArg(_groupFilterArg).value as String);
+    String searchString = context.getArg(_nameArg).value as String;
     RegExp searchRegex = RegExp(searchString, caseSensitive: false);
 
-    List<ProductWrapper> products = tcgPlayerService //
-        .searchProductsWrapped(
-          categoryId: tcgPlayerService //
-              .searchCategories(name: RegExp(RegExp.escape(categoryString)))
-              .tryFirst()
-              ?.categoryId,
-          anyName: searchRegex,
-        )
+    List<ProductModel> products = (await tcgPlayerService.searchProducts(
+      groupId: groupId,
+      anyName: searchRegex,
+    ))
         .sorted((a, b) => -1 * a.group.publishedOn.compareTo(b.group.publishedOn));
 
-    Map<int, SkuPriceCache> skuPriceCacheById = await tcgPlayerService.getSkuPriceCache(
+    Map<int, SkuPriceCache> skuPriceCacheById = await tcgPlayerService.searchSkuPriceCachesBySkuIds(
       skuIds: products.expand((product) => product.skus.map((sku) => sku.skuId)).toList(),
-      maxAge: Duration(minutes: 5),
     );
 
     if (products.isEmpty) {
@@ -138,7 +138,7 @@ class TcgPlayerSearchCommand extends CommandOptionBuilder {
     }
   }
 
-  static EmbedBuilder buildProductEmbed({required ProductWrapper product, required Map<int, SkuPriceCache> skuPriceCacheById, required DiscordColor? botColor}) {
+  static EmbedBuilder buildProductEmbed({required ProductModel product, required Map<int, SkuPriceCache> skuPriceCacheById, required DiscordColor? botColor}) {
     printingAbr(Printing printing) {
       List<String> segments = printing.name.split(' ');
       int maxWidth = 4;
@@ -157,9 +157,9 @@ class TcgPlayerSearchCommand extends CommandOptionBuilder {
       ..imageUrl = product.imageUrl.toDiscordString()
       ..fields = product.skus
           .sorted((a, b) => -1 * a.printing.displayOrder.compareTo(b.printing.displayOrder))
-          .sorted((a, b) => a.condition.displayOrder.compareTo(b.condition.displayOrder))
+          .sorted((a, b) => a.condition?.displayOrder.compareTo(b.condition?.displayOrder ?? 0) ?? -1)
           .map((sku) => EmbedFieldBuilder(
-                "${sku.condition.abbreviation} ${printingAbr(sku.printing)}",
+                "${sku.condition?.abbreviation} ${printingAbr(sku.printing)}",
                 () {
                   const String ws = "\u2800";
                   const String nil = "$ws---";

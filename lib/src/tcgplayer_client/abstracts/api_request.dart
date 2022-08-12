@@ -58,7 +58,7 @@ abstract class ApiGetRequest<T extends ApiBaseResponse> extends ApiRequest<T> wi
     Response response = await client.get(
       getUri(),
     );
-    return parseJsonResponse(jsonDecode(response.body));
+    return parseJsonResponse(jsonDecode(response.body) as Map<String, dynamic>);
   }
 }
 
@@ -71,7 +71,7 @@ abstract class ApiPostRequest<T extends ApiBaseResponse> extends ApiRequest<T> w
       getUri(),
       body: getBody(),
     );
-    return parseJsonResponse(jsonDecode(response.body));
+    return parseJsonResponse(jsonDecode(response.body) as Map<String, dynamic>);
   }
 }
 
@@ -87,7 +87,7 @@ abstract class ApiGetPagedRequest<T extends ApiPagedResponse> extends ApiRequest
         },
       ),
     ));
-    var response = parseJsonResponse(jsonDecode(jsonResponse.body));
+    var response = parseJsonResponse(jsonDecode(jsonResponse.body) as Map<String, dynamic>);
     return response;
   }
 }
@@ -105,7 +105,7 @@ abstract class ApiPostPagedRequest<T extends ApiPagedResponse> extends ApiReques
         "offset": offset.toString(),
       },
     ));
-    var response = parseJsonResponse(jsonDecode(jsonResponse.body));
+    var response = parseJsonResponse(jsonDecode(jsonResponse.body) as Map<String, dynamic>);
     return response;
   }
 }

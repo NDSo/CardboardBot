@@ -13,7 +13,7 @@ class TcgPlayerGroupSummaryCommand extends CommandOptionBuilder {
   static const String _categoryArg = "category";
   static const String _groupArg = "group";
 
-  TcgPlayerGroupSummaryCommand({required TcgPlayerCachingService tcgPlayerService})
+  TcgPlayerGroupSummaryCommand({required TcgPlayerCachingClient tcgPlayerService})
       : super(
           CommandOptionType.subCommand,
           "group_summary",
@@ -36,56 +36,52 @@ class TcgPlayerGroupSummaryCommand extends CommandOptionBuilder {
     registerHandler((p0) => _infoHandler(context: p0, tcgPlayerService: tcgPlayerService));
   }
 
-  static Future<void> _alertAddAutoCompleteHandler({required IAutocompleteInteractionEvent event, required TcgPlayerCachingService tcgPlayerService}) async {
+  static Future<void> _alertAddAutoCompleteHandler({required IAutocompleteInteractionEvent event, required TcgPlayerCachingClient tcgPlayerService}) async {
     switch (event.focusedOption.name) {
       case _categoryArg:
         return event.respond(
-          tcgPlayerService
-              .searchCategories(anyName: RegExp("${event.focusedOption.value}", caseSensitive: false))
+          (await tcgPlayerService.searchCategories(anyName: RegExp("${event.focusedOption.value}", caseSensitive: false)))
               .toSet()
+              .sorted((a, b) => a.name.compareTo(b.name))
+              .sorted((b, a) => a.popularity.compareTo(b.popularity))
               .map((e) => ArgChoiceBuilder(e.displayName.substringSafe(0, 100), e.categoryId.toString()))
               .toList()
-              .sorted((a, b) => a.name.compareTo(b.name))
-              .sorted((a, b) => a.name.length.compareTo(b.name.length))
               .subListSafe(0, 25),
         );
       case _groupArg:
         return event.respond(
-          tcgPlayerService
-              .searchGroups(
-                categoryId: int.parse(event.options.where((element) => element.name == _categoryArg).first.value),
-                name: RegExp("${event.focusedOption.value}", caseSensitive: false),
-              )
+          (await tcgPlayerService.searchGroups(
+            categoryId: int.parse(event.options.where((element) => element.name == _categoryArg).first.value as String),
+            name: RegExp("${event.focusedOption.value}", caseSensitive: false),
+          ))
               .toSet()
+              .sorted((b, a) => a.publishedOn.compareTo(b.publishedOn))
               .map((e) => ArgChoiceBuilder(e.name.substringSafe(0, 100), e.groupId.toString()))
               .toList()
-              .sorted((a, b) => a.name.compareTo(b.name))
-              .sorted((a, b) => a.name.length.compareTo(b.name.length))
               .subListSafe(0, 25),
         );
     }
   }
 
-  static Future<void> _infoHandler({required ISlashCommandInteractionEvent context, required TcgPlayerCachingService tcgPlayerService}) async {
+  static Future<void> _infoHandler({required ISlashCommandInteractionEvent context, required TcgPlayerCachingClient tcgPlayerService}) async {
     await context.acknowledge();
-    int categoryId = int.parse(context.getArg(_categoryArg).value);
-    int groupId = int.parse(context.getArg(_groupArg).value);
+    int categoryId = int.parse(context.getArg(_categoryArg).value as String);
+    int groupId = int.parse(context.getArg(_groupArg).value as String);
 
-    Category category = tcgPlayerService.searchCategories(categoryId: categoryId).first;
-    Group group = tcgPlayerService.searchGroups(groupId: groupId).first;
+    Category category = (await tcgPlayerService.searchCategories(categoryId: categoryId)).first;
+    Group group = (await tcgPlayerService.searchGroups(groupId: groupId)).first;
 
-    List<ProductWrapper> products = tcgPlayerService
-        .searchProductsWrapped(groupId: groupId)
+    List<ProductModel> products = (await tcgPlayerService.searchProducts(groupId: groupId))
         .where((product) => product.extendedData.any((extendedData) => RegExp("rarity", caseSensitive: false).hasMatch(extendedData.name)))
         .toList();
     Map<int, SkuPriceCache> skuPrices =
-        await tcgPlayerService.getSkuPriceCache(skuIds: products.expand((product) => product.skus.map((sku) => sku.skuId)).toList());
+        await tcgPlayerService.searchSkuPriceCachesBySkuIds(skuIds: products.expand((product) => product.skus.map((sku) => sku.skuId)).toList());
 
     Set<Printing> printings = products.expand((product) => product.skus.map((sku) => sku.printing)).toSet();
 
-    Map<Printing, Map<String?, List<ProductWrapper>>> productsByRarityByPrinting = {
+    Map<Printing, Map<String?, List<ProductModel>>> productsByRarityByPrinting = {
       for (var printing in printings)
-        printing: products.where((product) => product.skus.any((sku) => sku.printing == printing)).fold<Map<String?, List<ProductWrapper>>>(
+        printing: products.where((product) => product.skus.any((sku) => sku.printing == printing)).fold<Map<String?, List<ProductModel>>>(
           {},
           (productsByRarity, product) => productsByRarity
             ..update(
@@ -109,7 +105,7 @@ class TcgPlayerGroupSummaryCommand extends CommandOptionBuilder {
             products
                 .map<num?>(
                   (product) => product.skus
-                      .where((sku) => RegExp("mint", caseSensitive: false).hasMatch(sku.condition.name) && sku.printing == printing)
+                      .where((sku) => RegExp("mint", caseSensitive: false).hasMatch(sku.condition?.name ?? "") && sku.printing == printing)
                       // .map((sku) {
                       //   String price = "${sku.skuId}: ${skuPrices.get(sku.skuId)?.skuPrice.lowPrice} ${skuPrices.get(sku.skuId)?.skuPrice.marketPrice}";
                       //   if (rarity == "Rare") _logger.info(price);

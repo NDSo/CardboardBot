@@ -35,7 +35,9 @@ class TcgPlayerClient extends IOClient {
     return _singleton!;
   }
 
-  TcgPlayerClient._internal(this._publicKey, this._privateKey);
+  TcgPlayerClient._internal(this._publicKey, this._privateKey) {
+    _setupTimer();
+  }
 
   _BearerToken? _bearerToken;
 
@@ -51,7 +53,7 @@ class TcgPlayerClient extends IOClient {
           "client_secret": _privateKey,
         },
       );
-      _bearerToken = _BearerToken.fromJson(jsonDecode(response.body));
+      _bearerToken = _BearerToken.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
     }
   }
 
@@ -64,51 +66,47 @@ class TcgPlayerClient extends IOClient {
     };
   }
 
-  final Queue<Completer<dynamic>> _taskQueue = Queue<Completer<dynamic>>();
+  void _setupTimer() async {
+    //TODO: Get rid of this timer, let _addToQueue kick off a queue loop or something
+    // TODO: And experiment with x requests per minute rather than 1 request per x ms.
+    if (_scheduledQueue.isNotEmpty) {
+      var scheduledF = _scheduledQueue.removeFirst();
+      try {
+        await scheduledF();
+      } finally {
+        Timer(minTimeout, _setupTimer);
+      }
+    } else {
+      Timer(const Duration(milliseconds: 5), _setupTimer);
+    }
+  }
 
   // Limit is 300 per minute, one every 200ms.
   static const Duration minTimeout = Duration(milliseconds: 400);
 
-  Future<T> _throttled<T>(Future<T> Function() apiRequestF) async {
-    Completer<T> newCompleter = Completer();
-    Completer<dynamic>? previousCompleter;
-    if (_taskQueue.isNotEmpty) previousCompleter = _taskQueue.last;
+  final Queue<Function> _scheduledQueue = Queue<Function>();
 
-    Future<T> scheduledF(Completer<dynamic>? previous) async {
-      if (previous != null) {
-        await previous.future;
-        _taskQueue.remove(previous);
-      }
-      // Force every request to take at least 200ms, this kind of sucks but it is simpler throttle logic
-      DateTime start = DateTime.now();
-      T apiResponse = await apiRequestF();
-      DateTime end = DateTime.now();
-      Duration timeout = minTimeout - end.difference(start);
-      if (!timeout.isNegative) await Future<void>.delayed(timeout);
-      return apiResponse;
+  Future<T> _addToQueue<T>(Future<T> Function() apiRequestF) async {
+    Completer<T> completer = Completer();
+
+    Future<void> scheduledF() async {
+      completer.complete(apiRequestF());
+      return;
     }
 
-    _taskQueue.add(newCompleter);
-    newCompleter.complete(scheduledF(previousCompleter));
-    return newCompleter.future;
+    _scheduledQueue.add(scheduledF);
+
+    return completer.future;
   }
 
   @override
-  Future<Response> get(Uri url, {Map<String, String>? headers}) async => _throttled<Response>(() async => super.get(
+  Future<Response> get(Uri url, {Map<String, String>? headers}) async => _addToQueue<Response>(() async => super.get(
         url.replace(scheme: _baseUri.scheme, host: _baseUri.host),
         headers: (await _getRequestHeaders())..addAll(headers ?? {}),
       ));
 
   @override
-  Future<Response> post(Uri url, {Map<String, String>? headers, Object? body, Encoding? encoding}) async => _throttled<Response>(() async => super.post(
-        url.replace(scheme: _baseUri.scheme, host: _baseUri.host),
-        headers: (await _getRequestHeaders())..addAll(headers ?? {}),
-        body: body,
-        encoding: encoding,
-      ));
-
-  @override
-  Future<Response> put(Uri url, {Map<String, String>? headers, Object? body, Encoding? encoding}) async => _throttled<Response>(() async => super.put(
+  Future<Response> post(Uri url, {Map<String, String>? headers, Object? body, Encoding? encoding}) async => _addToQueue<Response>(() async => super.post(
         url.replace(scheme: _baseUri.scheme, host: _baseUri.host),
         headers: (await _getRequestHeaders())..addAll(headers ?? {}),
         body: body,
@@ -116,7 +114,7 @@ class TcgPlayerClient extends IOClient {
       ));
 
   @override
-  Future<Response> patch(Uri url, {Map<String, String>? headers, Object? body, Encoding? encoding}) async => _throttled<Response>(() async => super.patch(
+  Future<Response> put(Uri url, {Map<String, String>? headers, Object? body, Encoding? encoding}) async => _addToQueue<Response>(() async => super.put(
         url.replace(scheme: _baseUri.scheme, host: _baseUri.host),
         headers: (await _getRequestHeaders())..addAll(headers ?? {}),
         body: body,
@@ -124,7 +122,7 @@ class TcgPlayerClient extends IOClient {
       ));
 
   @override
-  Future<Response> delete(Uri url, {Map<String, String>? headers, Object? body, Encoding? encoding}) async => _throttled<Response>(() async => super.delete(
+  Future<Response> patch(Uri url, {Map<String, String>? headers, Object? body, Encoding? encoding}) async => _addToQueue<Response>(() async => super.patch(
         url.replace(scheme: _baseUri.scheme, host: _baseUri.host),
         headers: (await _getRequestHeaders())..addAll(headers ?? {}),
         body: body,
@@ -132,7 +130,15 @@ class TcgPlayerClient extends IOClient {
       ));
 
   @override
-  Future<String> read(Uri url, {Map<String, String>? headers}) async => _throttled<String>(() async => super.read(
+  Future<Response> delete(Uri url, {Map<String, String>? headers, Object? body, Encoding? encoding}) async => _addToQueue<Response>(() async => super.delete(
+        url.replace(scheme: _baseUri.scheme, host: _baseUri.host),
+        headers: (await _getRequestHeaders())..addAll(headers ?? {}),
+        body: body,
+        encoding: encoding,
+      ));
+
+  @override
+  Future<String> read(Uri url, {Map<String, String>? headers}) async => _addToQueue<String>(() async => super.read(
         url.replace(scheme: _baseUri.scheme, host: _baseUri.host),
         headers: (await _getRequestHeaders())..addAll(headers ?? {}),
       ));
@@ -154,8 +160,8 @@ class _BearerToken {
   _BearerToken(this._value, this._issued, this._expires);
 
   factory _BearerToken.fromJson(Map<String, dynamic> json) => _BearerToken(
-        json["access_token"],
-        TcgPlayerClient.dateFormat.parse(json[".issued"]),
-        TcgPlayerClient.dateFormat.parse(json[".expires"]),
+        json["access_token"] as String,
+        TcgPlayerClient.dateFormat.parse(json[".issued"] as String),
+        TcgPlayerClient.dateFormat.parse(json[".expires"] as String),
       );
 }

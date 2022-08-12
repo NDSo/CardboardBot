@@ -3,8 +3,8 @@ import 'dart:io';
 import 'package:googleapis_auth/auth_io.dart'
     show AutoRefreshingAuthClient, ServiceAccountCredentials, clientViaApplicationDefaultCredentials, clientViaServiceAccount;
 import 'package:googleapis/storage/v1.dart' as storage;
-import 'package:googleapis/compute/v1.dart' as compute;
 import 'package:googleapis/firestore/v1.dart' as firestore;
+import 'package:googleapis/secretmanager/v1.dart' as secret_manager;
 import 'package:kiwi/kiwi.dart';
 
 class GoogleCloudInitializer {
@@ -16,15 +16,14 @@ class GoogleCloudInitializer {
     if (_singleton != null) return;
 
     List<String> scopes = [
-      "https://www.googleapis.com/auth/cloud-platform",
-      "https://www.googleapis.com/auth/datastore",
-      "https://www.googleapis.com/auth/devstorage.read_write",
-      "https://www.googleapis.com/auth/compute",
+      firestore.FirestoreApi.datastoreScope,
+      secret_manager.SecretManagerApi.cloudPlatformScope,
+      storage.StorageApi.devstorageReadWriteScope,
     ];
 
     AutoRefreshingAuthClient? client;
 
-    var googleConfigFile = File("cardboard_bot/configs/googleapis_service_account.json");
+    var googleConfigFile = File("configs/googleapis_service_account.json");
     if (googleConfigFile.existsSync()) {
       // LOCAL DEVELOPMENT
       var clientCredentials = ServiceAccountCredentials.fromJson(googleConfigFile.readAsStringSync());
@@ -35,12 +34,12 @@ class GoogleCloudInitializer {
     }
 
     var storageApi = storage.StorageApi(client);
-    var computeApi = compute.ComputeApi(client);
     var firestoreApi = firestore.FirestoreApi(client);
+    var secretManagerApi = secret_manager.SecretManagerApi(client);
 
     KiwiContainer().registerInstance(storageApi);
-    KiwiContainer().registerInstance(computeApi);
     KiwiContainer().registerInstance(firestoreApi);
+    KiwiContainer().registerInstance(secretManagerApi);
 
     _singleton = GoogleCloudInitializer._internal();
   }

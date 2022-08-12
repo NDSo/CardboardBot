@@ -11,9 +11,9 @@ import 'package:cardboard_bot/src/tcgplayer_caching_service/services/price_cache
 import 'package:cardboard_bot/src/tcgplayer_caching_service/services/product_cache_service.dart';
 import 'package:cardboard_bot/tcgplayer_caching_service.dart';
 import 'package:cardboard_bot/tcgplayer_client.dart';
-import 'package:googleapis/compute/v1.dart' as compute show ComputeApi;
 import 'package:googleapis/firestore/v1.dart' as firestore show FirestoreApi;
 import 'package:googleapis/storage/v1.dart' as storage show StorageApi;
+import 'package:googleapis/secretmanager/v1.dart' as secret_manager show SecretManagerApi;
 import 'package:kiwi/kiwi.dart';
 import 'package:logging/logging.dart';
 import 'package:nyxx/nyxx.dart';
@@ -51,11 +51,8 @@ Future<void> initialize({String? googleCloudProjectId}) async {
     // Initialize cloud clients
     await GoogleCloudInitializer.initialize(projectId: googleCloudProjectId);
 
-    // Get keys from compute metadata
-    // TODO Move TO GOOGLE SECRETS
-    var metadata = (await KiwiContainer().resolve<compute.ComputeApi>().projects.get(googleCloudProjectId)).commonInstanceMetadata!;
-    KiwiContainer().registerInstance(NyxxConfig.fromMetadata(metadata));
-    KiwiContainer().registerInstance(TcgPlayerApiConfig.fromMetadata(metadata));
+    KiwiContainer().registerInstance(await NyxxConfig.fromSecretManager(googleCloudProjectId, KiwiContainer().resolve<secret_manager.SecretManagerApi>()));
+    KiwiContainer().registerInstance(await TcgPlayerApiConfig.fromSecretManager(googleCloudProjectId, KiwiContainer().resolve<secret_manager.SecretManagerApi>()));
 
     // Register Storage Layer
     KiwiContainer().registerSingleton<Repository<CategoryInfoCache>>((container) => CloudStorageRepository<CategoryInfoCache>(

@@ -97,7 +97,7 @@ class TcgPlayerAlertCommand extends CommandOptionBuilder {
         );
       case _skuArg:
         var options = (await tcgPlayerService //
-                .searchProductsByGroupId(
+                .searchProducts(
           groupId: int.parse(event.options.where((element) => element.name == _groupArg).first.value as String),
           anyName: RegExp("^${event.focusedOption.value}.*", caseSensitive: false),
         ))
@@ -121,7 +121,7 @@ class TcgPlayerAlertCommand extends CommandOptionBuilder {
       case _skuArg:
         return event.respond(
           (await tcgPlayerAlertActionService.getActions(ownerId: event.interaction.userAuthor!.id).map((action) async {
-            var product = (await tcgPlayerService.searchProductsBySkuId(skuId: action.skuId)).first;
+            var product = (await tcgPlayerService.searchProductsByProductId(productId: action.productId)).first;
             var sku = product.skus.firstWhere((element) => element.skuId == action.skuId);
             return ArgChoiceBuilder(
                 "${product.name} | ${sku.printing.name} | ${sku.condition?.name}${action.maxPrice == null ? "" : " | ${action.maxPrice?.toFormat(usdFormat)}"}"
@@ -141,15 +141,19 @@ class TcgPlayerAlertCommand extends CommandOptionBuilder {
       required TcgPlayerCachingClient tcgPlayerService,
       required TcgPlayerAlertActionService tcgPlayerAlertActionService}) async {
     await context.acknowledge(hidden: true);
+    int groupId = int.parse(context.getArg(_groupArg).value as String);
     int skuId = int.parse(context.getArg(_skuArg).value as String);
     num maxPrice = context.getArg(_priceArg).value as num;
 
+    var product = (await tcgPlayerService.searchProducts(groupId: groupId, skuId: skuId)).first;
     tcgPlayerAlertActionService.upsert(TcgPlayerAlertAction.create(
       ownerId: context.interaction.userAuthor!.id,
       skuId: skuId,
+      productId: product.productId,
+      groupId: product.groupId,
+      categoryId: product.categoryId,
       maxPrice: maxPrice,
     ));
-    var product = (await tcgPlayerService.searchProductsBySkuId(skuId: skuId)).first;
     var sku = product.skus.firstWhere((element) => element.skuId == skuId);
     String target = "${product.name} | ${sku.printing.name} | ${sku.condition?.name}";
     await context.respond(

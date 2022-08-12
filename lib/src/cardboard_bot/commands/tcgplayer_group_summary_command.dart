@@ -71,7 +71,7 @@ class TcgPlayerGroupSummaryCommand extends CommandOptionBuilder {
     Category category = (await tcgPlayerService.searchCategories(categoryId: categoryId)).first;
     Group group = (await tcgPlayerService.searchGroups(groupId: groupId)).first;
 
-    List<ProductModel> products = (await tcgPlayerService.searchProductsByGroupId(groupId: groupId))
+    List<ProductModel> products = (await tcgPlayerService.searchProducts(groupId: groupId))
         .where((product) => product.extendedData.any((extendedData) => RegExp("rarity", caseSensitive: false).hasMatch(extendedData.name)))
         .toList();
     Map<int, SkuPriceCache> skuPrices =

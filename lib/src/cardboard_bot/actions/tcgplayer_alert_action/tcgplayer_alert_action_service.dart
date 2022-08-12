@@ -25,8 +25,10 @@ class TcgPlayerAlertActionService extends ActionService<TcgPlayerAlertAction> {
   TcgPlayerAlertActionService(super.bot, super._actionRepository, this._tcgPlayerService, this._previousSkuPriceStorageRepository) {
     setupPriceCheckLoop(Duration.zero);
     Timer.periodic(const Duration(hours: 1), (timer) async {
-      await _previousSkuPriceStorageRepository.upsert(
+      if (_previousSkuPrices.isNotEmpty) {
+        await _previousSkuPriceStorageRepository.upsert(
           ids: _previousSkuPrices.keys.map((e) => e.toString()).toList(), objects: _previousSkuPrices.values.toList());
+      }
     });
   }
 
@@ -92,7 +94,7 @@ class TcgPlayerAlertActionService extends ActionService<TcgPlayerAlertAction> {
       var message = MessageBuilder();
       message.embeds = (await ownerIdAndSkuPriceChangeByAlert.value.entries.map((alertAndSkuPriceChange) async {
         return _buildProductEmbed(
-          product: (await _tcgPlayerService.searchProductsBySkuId(skuId: alertAndSkuPriceChange.key.skuId)).first,
+          product: (await _tcgPlayerService.searchProductsByProductId(productId: alertAndSkuPriceChange.key.productId)).first,
           maxPrice: alertAndSkuPriceChange.key.maxPrice,
           skuPriceChange: alertAndSkuPriceChange.value,
           botColor: botColor,

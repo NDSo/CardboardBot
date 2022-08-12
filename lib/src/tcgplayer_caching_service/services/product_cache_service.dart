@@ -105,12 +105,15 @@ class ProductCacheServiceHighMemory extends ProductCacheService {
   Future<void> _onBoot() async {
     var categoryInfoCache = await _tier2CategoryInfoCacheRepository.getById(CategoryInfoCache.buildId());
     if (categoryInfoCache != null) {
-      _tier1CategoryInfoCacheRepository.upsert(ids: [CategoryInfoCache.buildId()], objects: [categoryInfoCache]);
+      await _tier1CategoryInfoCacheRepository.upsert(ids: [CategoryInfoCache.buildId()], objects: [categoryInfoCache]);
 
       var productInfoCache = await _tier2ProductInfoCacheRepository.getAll();
-      _tier1ProductInfoCacheRepository.upsert(ids: productInfoCache.map((e) => e.getId()).toList(), objects: productInfoCache);
+      await _tier1ProductInfoCacheRepository.upsert(ids: productInfoCache.map((e) => e.getId()).toList(), objects: productInfoCache);
+      if (categoryInfoCache.timestamp.isBefore(DateTime.now().subtract(Duration(days: 1)))) {
+        await _refreshCategoryInfoAndProductInfoCache(previousCache: categoryInfoCache);
+      }
     } else {
-      _refreshCategoryInfoAndProductInfoCache(previousCache: CategoryInfoCache.empty());
+      await _refreshCategoryInfoAndProductInfoCache(previousCache: CategoryInfoCache.empty());
     }
   }
 
@@ -141,6 +144,7 @@ class ProductCacheServiceHighMemory extends ProductCacheService {
 
   Future<CategoryInfoCache> _refreshCategoryInfoAndProductInfoCache({required CategoryInfoCache previousCache}) async {
     Stopwatch stopwatch = Stopwatch()..start();
+    var timestamp = DateTime.now().toUtc();
 
     List<Category> categoryList = await _getApiCategories(_inclusionRules);
     Set<Group> groups = (await _getApiGroups(_inclusionRules, categoryList)).toSet();
@@ -149,9 +153,8 @@ class ProductCacheServiceHighMemory extends ProductCacheService {
     Map<int, List<Rarity>> raritiesByCategoryId = await _getApiCategoryRarities(categoryList);
 
     // Only query products for new (to me) groups or recent groups
-    DateTime cutoff = DateTime.now().subtract(Duration(days: 30));
     Set<Group> recentExistingGroups = groups //
-        .where((group) => group.publishedOn.isAfter(cutoff) && previousCache.groupById.keys.contains(group.groupId))
+        .where((group) => group.modifiedOn.isAfter(previousCache.timestamp) && previousCache.groupById.keys.contains(group.groupId))
         .toSet();
 
     Set<Group> newGroups = groups //
@@ -159,20 +162,17 @@ class ProductCacheServiceHighMemory extends ProductCacheService {
         .toSet();
 
     // Update Product Cache and write to database
-    Map<int, Map<int, Set<int>>> skuIdByProductIdByGroupId = {};
     Set<Group> successfullyCachedNewGroups = {};
     List<ProductInfoCache> productInfoCacheList = [];
+    Map<int, int> groupIdByProductId = {};
 
     for (var group in [...recentExistingGroups, ...newGroups]) {
       List<ProductExtended> groupProductList = await _getApiProductExtended(group.groupId);
       try {
         productInfoCacheList.add(ProductInfoCache(timestamp: DateTime.now(), groupId: group.groupId, productList: groupProductList));
-
-
-        skuIdByProductIdByGroupId[group.groupId] = groupProductList.fold<Map<int, Set<int>>>(
-          <int, Set<int>>{},
-              (t, e) => t..addAll({e.productId: e.skus.map((e) => e.skuId).toSet()}),
-        );
+        groupIdByProductId.addAll({
+          for (var product in groupProductList) product.productId: group.groupId,
+        });
         if (newGroups.contains(group)) successfullyCachedNewGroups.add(group);
       } catch (e, stacktrace) {
         _logger.severe("Failed to save category: ${group.categoryId} group: ${group.groupId} to cloud!", e, stacktrace);
@@ -183,16 +183,15 @@ class ProductCacheServiceHighMemory extends ProductCacheService {
 
     // Merge category group cache
     var freshCategoryGroupCache = CategoryInfoCache(
-      timestamp: DateTime.now().toUtc(),
+      timestamp: timestamp,
       categoryList: categoryList,
       groupList: groups.toList(),
       conditionsByCategoryId: conditionsByCategoryId,
       printingsByCategoryId: printingsByCategoryId,
       raritiesByCategoryId: raritiesByCategoryId,
-      // Merge Previous Product Ids
-      skuIdByProductIdByGroupId: {
-        ...previousCache.skuIdByProductIdByGroupId,
-        ...skuIdByProductIdByGroupId,
+      groupIdByProductId: {
+        ...previousCache.groupIdByProductId,
+        ...groupIdByProductId,
       },
     );
 
@@ -219,7 +218,7 @@ class ProductCacheServiceHighMemory extends ProductCacheService {
     // Log and Return
     stopwatch.stop();
     _logger.info(
-        "_refreshProductCache Time: ${stopwatch.elapsed.inSeconds}s | Recent Groups: ${recentExistingGroups.length} | New Groups: ${newGroups.length} | Recent Products: ${skuIdByProductIdByGroupId.values.expand((element) => element.keys).length}");
+        "_refreshProductCache Time: ${stopwatch.elapsed.inSeconds}s | Recent Groups: ${recentExistingGroups.length} | New Groups: ${newGroups.length} | Recent&New Products: ${groupIdByProductId.length}");
 
     return freshCategoryGroupCache;
   }
@@ -264,11 +263,15 @@ class ProductCacheServiceLowMemory extends ProductCacheService {
   }
 
   Future<void> _onBoot() async {
+    // await MemCheck.printMemoryUsage();
     var categoryInfoCache = await _tier2CategoryInfoCacheRepository.getById(CategoryInfoCache.buildId());
     if (categoryInfoCache != null) {
-      _tier1CategoryInfoCacheRepository.upsert(ids: [CategoryInfoCache.buildId()], objects: [categoryInfoCache]);
+      await _tier1CategoryInfoCacheRepository.upsert(ids: [CategoryInfoCache.buildId()], objects: [categoryInfoCache]);
+      if (categoryInfoCache.timestamp.isBefore(DateTime.now().subtract(const Duration(days: 1)))) {
+        await _refreshCategoryInfoAndProductInfoCache(previousCache: categoryInfoCache);
+      }
     } else {
-      _refreshCategoryInfoAndProductInfoCache(previousCache: CategoryInfoCache.empty());
+      await _refreshCategoryInfoAndProductInfoCache(previousCache: CategoryInfoCache.empty());
     }
   }
 
@@ -323,6 +326,7 @@ class ProductCacheServiceLowMemory extends ProductCacheService {
 
   Future<CategoryInfoCache> _refreshCategoryInfoAndProductInfoCache({required CategoryInfoCache previousCache}) async {
     Stopwatch stopwatch = Stopwatch()..start();
+    var timestamp = DateTime.now().toUtc();
 
     List<Category> categoryList = await _getApiCategories(_inclusionRules);
     Set<Group> groups = (await _getApiGroups(_inclusionRules, categoryList)).toSet();
@@ -331,9 +335,9 @@ class ProductCacheServiceLowMemory extends ProductCacheService {
     Map<int, List<Rarity>> raritiesByCategoryId = await _getApiCategoryRarities(categoryList);
 
     // Only query products for new (to me) groups or recent groups
-    DateTime cutoff = DateTime.now().subtract(Duration(days: 30));
+    // modifiedOn data looks reasonable, publishedOn data is very wrong (now) for 25% of the groups
     Set<Group> recentExistingGroups = groups //
-        .where((group) => group.publishedOn.isAfter(cutoff) && previousCache.groupById.keys.contains(group.groupId))
+        .where((group) => group.modifiedOn.isAfter(previousCache.timestamp) && previousCache.groupById.keys.contains(group.groupId))
         .toSet();
 
     Set<Group> newGroups = groups //
@@ -341,8 +345,8 @@ class ProductCacheServiceLowMemory extends ProductCacheService {
         .toSet();
 
     // Update Product Cache and write to database
-    Map<int, Map<int, Set<int>>> skuIdByProductIdByGroupId = {};
     Set<Group> successfullyCachedNewGroups = {};
+    Map<int, int> groupIdByProductId = {};
 
     for (var group in [...recentExistingGroups, ...newGroups]) {
       List<ProductExtended> groupProductList = await _getApiProductExtended(group.groupId);
@@ -352,11 +356,9 @@ class ProductCacheServiceLowMemory extends ProductCacheService {
           objects: [productInfoCache],
           ids: [productInfoCache.getId()],
         );
-
-        skuIdByProductIdByGroupId[group.groupId] = groupProductList.fold<Map<int, Set<int>>>(
-          <int, Set<int>>{},
-          (t, e) => t..addAll({e.productId: e.skus.map((e) => e.skuId).toSet()}),
-        );
+        groupIdByProductId.addAll({
+          for (var product in groupProductList) product.productId: group.groupId,
+        });
         if (newGroups.contains(group)) successfullyCachedNewGroups.add(group);
       } catch (e, stacktrace) {
         _logger.severe("Failed to save category: ${group.categoryId} group: ${group.groupId} to cloud!", e, stacktrace);
@@ -367,24 +369,24 @@ class ProductCacheServiceLowMemory extends ProductCacheService {
 
     // Merge category group cache
     var freshCategoryGroupCache = CategoryInfoCache(
-      timestamp: DateTime.now().toUtc(),
+      timestamp: timestamp,
       categoryList: categoryList,
       groupList: groups.toList(),
       conditionsByCategoryId: conditionsByCategoryId,
       printingsByCategoryId: printingsByCategoryId,
       raritiesByCategoryId: raritiesByCategoryId,
-      // Merge Previous Product Ids
-      skuIdByProductIdByGroupId: {
-        ...previousCache.skuIdByProductIdByGroupId,
-        ...skuIdByProductIdByGroupId,
+      groupIdByProductId: {
+        ...previousCache.groupIdByProductId,
+        ...groupIdByProductId,
       },
     );
 
-    await _tier2CategoryInfoCacheRepository.upsert(
+    await _tier1CategoryInfoCacheRepository.upsert(
       objects: [freshCategoryGroupCache],
       ids: [freshCategoryGroupCache.getId()],
     );
-    await _tier1CategoryInfoCacheRepository.upsert(
+
+    await _tier2CategoryInfoCacheRepository.upsert(
       objects: [freshCategoryGroupCache],
       ids: [freshCategoryGroupCache.getId()],
     );
@@ -392,7 +394,7 @@ class ProductCacheServiceLowMemory extends ProductCacheService {
     // Log and Return
     stopwatch.stop();
     _logger.info(
-        "_refreshProductCache Time: ${stopwatch.elapsed.inSeconds}s | Recent Groups: ${recentExistingGroups.length} | New Groups: ${newGroups.length} | Recent Products: ${skuIdByProductIdByGroupId.values.expand((element) => element.keys).length}");
+        "_refreshProductCache Time: ${stopwatch.elapsed.inSeconds}s | Recent Groups: ${recentExistingGroups.length} | New Groups: ${newGroups.length} | Recent&New Products: ${groupIdByProductId.length}");
 
     return freshCategoryGroupCache;
   }

@@ -19,12 +19,10 @@ class CategoryInfoCache {
   @JsonKey()
   final Map<int, List<Rarity>> raritiesByCategoryId;
   @JsonKey()
-  final Map<int, Map<int, Set<int>>> skuIdByProductIdByGroupId;
+  final Map<int, int> groupIdByProductId; // 6mb, needed for rich embeds
 
   final Map<int, Category> categoryById;
   final Map<int, Group> groupById;
-  final Map<int, int> productIdBySkuId;
-  final Map<int, int> groupIdByProductId;
 
   CategoryInfoCache({
     required this.timestamp,
@@ -33,7 +31,7 @@ class CategoryInfoCache {
     required this.conditionsByCategoryId,
     required this.printingsByCategoryId,
     required this.raritiesByCategoryId,
-    required this.skuIdByProductIdByGroupId,
+    required this.groupIdByProductId,
   })  : categoryById = Map<int, Category>.fromIterables(
           categoryList.map((e) => e.categoryId),
           categoryList,
@@ -41,18 +39,6 @@ class CategoryInfoCache {
         groupById = Map<int, Group>.fromIterables(
           groupList.map((e) => e.groupId),
           groupList,
-        ),
-        groupIdByProductId = skuIdByProductIdByGroupId.entries.fold<Map<int, int>>(
-          <int, int>{},
-          (t1, e1) => t1..addAll({for (var productId in e1.value.keys) productId: e1.key}),
-        ),
-        productIdBySkuId = skuIdByProductIdByGroupId.entries.fold<Map<int, int>>(
-          <int, int>{},
-          (t1, e1) => t1
-            ..addAll(e1.value.entries.fold(
-              <int, int>{},
-              (t2, e2) => t2..addAll({for (var skuId in e2.value) skuId: e2.key}),
-            )),
         );
 
   CategoryInfoCache.empty()
@@ -62,11 +48,9 @@ class CategoryInfoCache {
         printingsByCategoryId = {},
         raritiesByCategoryId = {},
         groupList = [],
-        categoryById = {},
-        groupById = {},
-        productIdBySkuId = {},
         groupIdByProductId = {},
-        skuIdByProductIdByGroupId = {};
+        categoryById = {},
+        groupById = {};
 
   factory CategoryInfoCache.fromJson(Map<String, dynamic> json) => _$CategoryInfoCacheFromJson(json);
 

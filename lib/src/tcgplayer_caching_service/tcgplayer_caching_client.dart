@@ -47,33 +47,23 @@ class TcgPlayerCachingClient {
         .toList();
   }
 
-  Future<List<ProductModel>> searchProductsBySkuId({required int skuId}) async {
-    var cache = (await _productCacheService.getCategoryInfoCache());
-    int groupId = cache.groupIdByProductId[cache.productIdBySkuId[skuId]]!;
-    return _searchProducts(groupId: groupId, skuId: skuId);
-  }
-
-  Future<List<ProductModel>> searchProductsByProductId({required int productId}) async {
+  Future<List<ProductModel>> searchProductsByProductId({required int productId, int? skuId}) async {
     int groupId = (await _productCacheService.getCategoryInfoCache()).groupIdByProductId[productId]!;
-    return _searchProducts(groupId: groupId, productId: productId);
+    return searchProducts(groupId: groupId, productId: productId, skuId: skuId);
   }
 
-  Future<List<ProductModel>> searchProductsByGroupId({required int groupId, RegExp? anyName}) async {
-    return _searchProducts(groupId: groupId, anyName: anyName);
-  }
-
-  Future<List<ProductModel>> _searchProducts({int? productId, required int groupId, RegExp? anyName, int? skuId}) async {
+  Future<List<ProductModel>> searchProducts({required int groupId, int? productId, int? skuId, RegExp? anyName}) async {
     var categoryCache = await _productCacheService.getCategoryInfoCache();
     Group group = categoryCache.groupById.get(groupId)!;
     Category category = categoryCache.categoryById.get(group.categoryId)!;
-    Map<int, Printing> printings = {
+    List<ProductExtended> products = (await _productCacheService.getProductInfoCache(groupId: groupId)).productList;
+
+    Map<int, Printing> printingsById = {
       for (var printing in categoryCache.printingsByCategoryId.get(category.categoryId)!) printing.printingId: printing,
     };
-    Map<int, Condition> conditions = {
+    Map<int, Condition> conditionsById = {
       for (var condition in categoryCache.conditionsByCategoryId.get(category.categoryId)!) condition.conditionId: condition,
     };
-
-    List<ProductExtended> products = (await _productCacheService.getProductInfoCache(groupId: groupId)).productList;
 
     return products
         .where(
@@ -92,8 +82,8 @@ class TcgPlayerCachingClient {
                 .map(
                   (sku) => SkuModel(
                     sku,
-                    condition: conditions[sku.conditionId],
-                    printing: printings[sku.printingId]!,
+                    condition: conditionsById[sku.conditionId],
+                    printing: printingsById[sku.printingId]!,
                   ),
                 )
                 .toList(),

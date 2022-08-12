@@ -63,7 +63,7 @@ class TcgPlayerSearchCommand extends CommandOptionBuilder {
             )..registerAutocompleteHandler(
                 (p0) async => p0.respond(
                   (await tcgPlayerService //
-                          .searchProductsByGroupId(
+                          .searchProducts(
                     groupId: int.parse(p0.options.where((element) => element.name == _groupFilterArg).first.value as String),
                     anyName: RegExp(".*${p0.focusedOption.value}.*", caseSensitive: false),
                   ))
@@ -96,7 +96,7 @@ class TcgPlayerSearchCommand extends CommandOptionBuilder {
     String searchString = context.getArg(_nameArg).value as String;
     RegExp searchRegex = RegExp(searchString, caseSensitive: false);
 
-    List<ProductModel> products = (await tcgPlayerService.searchProductsByGroupId(
+    List<ProductModel> products = (await tcgPlayerService.searchProducts(
       groupId: groupId,
       anyName: searchRegex,
     ))

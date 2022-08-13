@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -11,9 +12,6 @@ import 'package:cardboard_bot/src/tcgplayer_caching_service/services/price_cache
 import 'package:cardboard_bot/src/tcgplayer_caching_service/services/product_cache_service.dart';
 import 'package:cardboard_bot/tcgplayer_caching_service.dart';
 import 'package:cardboard_bot/tcgplayer_client.dart';
-import 'package:googleapis/firestore/v1.dart' as firestore show FirestoreApi;
-import 'package:googleapis/storage/v1.dart' as storage show StorageApi;
-import 'package:googleapis/secretmanager/v1.dart' as secret_manager show SecretManagerApi;
 import 'package:kiwi/kiwi.dart';
 import 'package:logging/logging.dart';
 import 'package:nyxx/nyxx.dart';
@@ -27,17 +25,24 @@ import 'tcgplayer_api_config.dart';
 void main(List<String> arguments) async {
 // ignore: unused_local_variable
   final Logger logger = Logger("main");
-  Logger.root.onRecord.listen((LogRecord rec) {
-    print("[${rec.time}] [${rec.level.name}] [${rec.loggerName}] ${rec.message}");
-    if (rec.error != null && (rec.error is Error || rec.error is Exception)) print("${rec.error.toString()}");
-    if (rec.stackTrace != null && (rec.level == Level.SEVERE || rec.level == Level.SHOUT)) print("${rec.stackTrace?.toString()}");
+  Logger.root.onRecord.listen(
+    (LogRecord rec) {
+      print("[${rec.time}] [${rec.level.name}] [${rec.loggerName}] ${rec.message}");
+      if (rec.error != null && (rec.error is Error || rec.error is Exception)) print("${rec.error.toString()}");
+      if (rec.stackTrace != null && (rec.level == Level.SEVERE || rec.level == Level.SHOUT)) print("${rec.stackTrace?.toString()}");
+    },
+    onError: (e) => null,
+  );
+
+  runZonedGuarded(() async {
+    String? googleCloudProjectId;
+    var argParser = ArgParser()..addOption("google_cloud_project_id", callback: (value) => googleCloudProjectId = value);
+    var argResults = argParser.parse(arguments);
+
+    await initialize(googleCloudProjectId: googleCloudProjectId);
+  }, (error, stack) {
+    logger.severe("Uncaught Exception in runZonedGuarded", error, stack);
   });
-
-  String? googleCloudProjectId;
-  var argParser = ArgParser()..addOption("google_cloud_project_id", callback: (value) => googleCloudProjectId = value);
-  var argResults = argParser.parse(arguments);
-
-  await initialize(googleCloudProjectId: googleCloudProjectId);
 }
 
 Future<void> initialize({String? googleCloudProjectId}) async {
@@ -49,16 +54,16 @@ Future<void> initialize({String? googleCloudProjectId}) async {
   ///////////////
   if (googleCloudProjectId != null) {
     // Initialize cloud clients
-    await GoogleCloudInitializer.initialize(projectId: googleCloudProjectId);
+    var googleCloudApis = await GoogleCloudInitializer.initialize(projectId: googleCloudProjectId);
 
-    KiwiContainer().registerInstance(await NyxxConfig.fromSecretManager(googleCloudProjectId, KiwiContainer().resolve<secret_manager.SecretManagerApi>()));
-    KiwiContainer().registerInstance(await TcgPlayerApiConfig.fromSecretManager(googleCloudProjectId, KiwiContainer().resolve<secret_manager.SecretManagerApi>()));
+    KiwiContainer().registerInstance(await NyxxConfig.fromSecretManager(googleCloudProjectId, googleCloudApis.secretManagerApi));
+    KiwiContainer().registerInstance(await TcgPlayerApiConfig.fromSecretManager(googleCloudProjectId, googleCloudApis.secretManagerApi));
 
     // Register Storage Layer
     KiwiContainer().registerSingleton<Repository<CategoryInfoCache>>((container) => CloudStorageRepository<CategoryInfoCache>(
           objectFromJson: CategoryInfoCache.fromJson,
           compressionCodec: Utf8Codec().fuse(GZipCodec()),
-          storageApi: container.resolve<storage.StorageApi>(),
+          storageApi: googleCloudApis.storageApi,
           googleProjectId: googleCloudProjectId,
           documentName: "TcgPlayerProductCache",
         ));
@@ -66,7 +71,7 @@ Future<void> initialize({String? googleCloudProjectId}) async {
     KiwiContainer().registerSingleton<Repository<ProductInfoCache>>((container) => FirestoreRepository<ProductInfoCache>(
           objectFromJson: ProductInfoCache.fromJson,
           compressionCodec: Utf8Codec().fuse(GZipCodec()).fuse(Base64Codec()),
-          firestoreApi: container.resolve<firestore.FirestoreApi>(),
+          firestoreApi: googleCloudApis.firestoreApi,
           googleProjectId: googleCloudProjectId,
           collectionId: "productsByGroup",
         ));
@@ -74,7 +79,7 @@ Future<void> initialize({String? googleCloudProjectId}) async {
     KiwiContainer().registerSingleton<Repository<TcgPlayerAlertAction>>((container) => FirestoreRepository<TcgPlayerAlertAction>(
           objectFromJson: TcgPlayerAlertAction.fromJson,
           compressionCodec: null,
-          firestoreApi: container.resolve<firestore.FirestoreApi>(),
+          firestoreApi: googleCloudApis.firestoreApi,
           googleProjectId: googleCloudProjectId,
           collectionId: "tcgplayerAlertActions",
         ));
@@ -82,7 +87,7 @@ Future<void> initialize({String? googleCloudProjectId}) async {
     KiwiContainer().registerSingleton<Repository<SkuPriceCache>>((container) => CloudStorageRepository<SkuPriceCache>(
           objectFromJson: SkuPriceCache.fromJson,
           compressionCodec: Utf8Codec().fuse(GZipCodec()),
-          storageApi: container.resolve<storage.StorageApi>(),
+          storageApi: googleCloudApis.storageApi,
           googleProjectId: googleCloudProjectId,
           documentName: "TcgPlayerSkuPriceCache",
         ));

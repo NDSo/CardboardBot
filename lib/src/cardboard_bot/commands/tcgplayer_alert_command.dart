@@ -141,6 +141,17 @@ class TcgPlayerAlertCommand extends CommandOptionBuilder {
       required TcgPlayerCachingClient tcgPlayerService,
       required TcgPlayerAlertActionService tcgPlayerAlertActionService}) async {
     await context.acknowledge(hidden: true);
+
+    // Limit action count per user
+    if (tcgPlayerAlertActionService.isOverLimit(context.interaction.userAuthor!.id)) {
+      await context.respond(
+        MessageBuilder.content(
+            "You've already reached your price alert limit of ${MessageDecoration.bold.format(TcgPlayerAlertActionService.perUserActionLimit.toString())}! Delete one and try again!"),
+        hidden: true,
+      );
+      return;
+    }
+
     int groupId = int.parse(context.getArg(_groupArg).value as String);
     int skuId = int.parse(context.getArg(_skuArg).value as String);
     num maxPrice = context.getArg(_priceArg).value as num;
@@ -157,8 +168,9 @@ class TcgPlayerAlertCommand extends CommandOptionBuilder {
     var sku = product.skus.firstWhere((element) => element.skuId == skuId);
     String target = "${product.name} | ${sku.printing.name} | ${sku.condition?.name}";
     await context.respond(
-        MessageBuilder.content("Alerting for ${MessageDecoration.bold.format(maxPrice.toFormat(usdFormat))} ${MessageDecoration.codeSimple.format(target)}!"),
-        hidden: true);
+      MessageBuilder.content("Alerting for ${MessageDecoration.bold.format(maxPrice.toFormat(usdFormat))} ${MessageDecoration.codeSimple.format(target)}!"),
+      hidden: true,
+    );
   }
 
   static void _alertDeleteHandler(

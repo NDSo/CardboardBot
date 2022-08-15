@@ -22,8 +22,10 @@ class TcgPlayerAlertActionService extends ActionService<TcgPlayerAlertAction> {
 
   final _SkuIdQueue _skuIdSet = _SkuIdQueue();
 
+  static const int perUserActionLimit = 25;
+
   TcgPlayerAlertActionService(super.bot, super._actionRepository, this._tcgPlayerService, this._previousSkuPriceStorageRepository) {
-    setupPriceCheckLoop(Duration.zero);
+    _setupPriceCheckLoop(Duration.zero);
     Timer.periodic(const Duration(hours: 1), (timer) async {
       if (_previousSkuPrices.isNotEmpty) {
         await _previousSkuPriceStorageRepository.upsert(
@@ -32,7 +34,11 @@ class TcgPlayerAlertActionService extends ActionService<TcgPlayerAlertAction> {
     });
   }
 
-  void setupPriceCheckLoop(Duration queryLatency) {
+  bool isOverLimit(Snowflake ownerId) {
+    return getActions(ownerId: ownerId).length >= perUserActionLimit;
+  }
+
+  void _setupPriceCheckLoop(Duration queryLatency) {
     const int count = 250;
     const Duration desiredMaxAge = Duration(minutes: 3);
     const Duration minimumLatency = Duration(milliseconds: 200);
@@ -51,7 +57,7 @@ class TcgPlayerAlertActionService extends ActionService<TcgPlayerAlertAction> {
         _logger.severe("Failed to check for sku price changes!", e, stacktrace);
       } finally {
         stopwatch.stop();
-        setupPriceCheckLoop(stopwatch.elapsed);
+        _setupPriceCheckLoop(stopwatch.elapsed);
       }
     });
   }

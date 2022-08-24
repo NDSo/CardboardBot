@@ -31,7 +31,6 @@ metadata:
               'f:containers':
                 'k:{"name":"cardboardbot-sha256-1"}':
                   .: {}
-                  'f:image': {}
                   'f:imagePullPolicy': {}
                   'f:name': {}
                   'f:resources': {}
@@ -45,6 +44,29 @@ metadata:
       manager: GoogleCloudConsole
       operation: Update
       time: '2022-08-12T22:12:46Z'
+    - apiVersion: apps/v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        'f:metadata':
+          'f:annotations':
+            'f:gcb-build-id': {}
+            'f:kubectl.kubernetes.io/last-applied-configuration': {}
+          'f:labels':
+            'f:app.kubernetes.io/version': {}
+        'f:spec':
+          'f:template':
+            'f:metadata':
+              'f:annotations':
+                'f:gcb-build-id': {}
+              'f:labels':
+                'f:app.kubernetes.io/version': {}
+            'f:spec':
+              'f:containers':
+                'k:{"name":"cardboardbot-sha256-1"}':
+                  'f:image': {}
+      manager: kubectl-client-side-apply
+      operation: Update
+      time: '2022-08-24T01:28:43Z'
     - apiVersion: apps/v1
       fieldsType: FieldsV1
       fieldsV1:
@@ -79,7 +101,7 @@ metadata:
       manager: kube-controller-manager
       operation: Update
       subresource: status
-      time: '2022-08-12T22:20:29Z'
+      time: '2022-08-24T01:28:50Z'
   name: cardboardbot
   namespace: default
 spec:
@@ -138,6 +160,18 @@ metadata:
       operation: Update
       subresource: status
       time: '2022-08-12T22:13:03Z'
+    - apiVersion: autoscaling/v2beta1
+      fieldsType: FieldsV1
+      fieldsV1:
+        'f:metadata':
+          'f:annotations':
+            'f:gcb-build-id': {}
+            'f:kubectl.kubernetes.io/last-applied-configuration': {}
+          'f:labels':
+            'f:app.kubernetes.io/version': {}
+      manager: kubectl-client-side-apply
+      operation: Update
+      time: '2022-08-24T01:28:45Z'
   name: cardboardbot-hpa-lwpm
   namespace: default
 spec:
@@ -152,86 +186,3 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: cardboardbot
----
-apiVersion: v1
-kind: Service
-metadata:
-  annotations:
-    cloud.google.com/neg: '{"ingress":true}'
-  finalizers:
-    - service.kubernetes.io/load-balancer-cleanup
-  labels:
-    app: cardboardbot
-  managedFields:
-    - apiVersion: v1
-      fieldsType: FieldsV1
-      fieldsV1:
-        'f:metadata':
-          'f:labels':
-            .: {}
-            'f:app': {}
-        'f:spec':
-          'f:allocateLoadBalancerNodePorts': {}
-          'f:externalTrafficPolicy': {}
-          'f:internalTrafficPolicy': {}
-          'f:ports':
-            .: {}
-            'k:{"port":80,"protocol":"TCP"}':
-              .: {}
-              'f:name': {}
-              'f:port': {}
-              'f:protocol': {}
-              'f:targetPort': {}
-            'k:{"port":443,"protocol":"TCP"}':
-              .: {}
-              'f:name': {}
-              'f:port': {}
-              'f:protocol': {}
-              'f:targetPort': {}
-          'f:selector': {}
-          'f:sessionAffinity': {}
-          'f:type': {}
-      manager: GoogleCloudConsole
-      operation: Update
-      time: '2022-08-12T22:20:28Z'
-    - apiVersion: v1
-      fieldsType: FieldsV1
-      fieldsV1:
-        'f:metadata':
-          'f:finalizers':
-            .: {}
-            'v:"service.kubernetes.io/load-balancer-cleanup"': {}
-        'f:status':
-          'f:loadBalancer':
-            'f:ingress': {}
-      manager: kube-controller-manager
-      operation: Update
-      subresource: status
-      time: '2022-08-12T22:21:01Z'
-  name: cardboardbot-service
-  namespace: default
-spec:
-  allocateLoadBalancerNodePorts: true
-  clusterIP: 10.8.8.251
-  clusterIPs:
-    - 10.8.8.251
-  externalTrafficPolicy: Cluster
-  internalTrafficPolicy: Cluster
-  ipFamilies:
-    - IPv4
-  ipFamilyPolicy: SingleStack
-  ports:
-    - name: 80-to-80-tcp
-      nodePort: 30805
-      port: 80
-      protocol: TCP
-      targetPort: 80
-    - name: 443-to-443-tcp
-      nodePort: 30624
-      port: 443
-      protocol: TCP
-      targetPort: 443
-  selector:
-    app: cardboardbot
-  sessionAffinity: None
-  type: LoadBalancer

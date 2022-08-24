@@ -65,16 +65,15 @@ class TcgPlayerSearchCommand extends CommandOptionBuilder {
                   (await tcgPlayerService //
                           .searchProducts(
                     groupId: int.parse(p0.options.where((element) => element.name == _groupFilterArg).first.value as String),
-                    anyName: RegExp(".*${p0.focusedOption.value}.*", caseSensitive: false),
+                    anyName: RegExp("${RegExp.escape((p0.focusedOption.value as String?) ?? "")}", caseSensitive: false),
                   ))
-                      .map((e) => e.name)
-                      .toSet()
-                      .toList()
-                      .sorted((a, b) => a.compareTo(b))
-                      .prependedBy([p0.focusedOption.value as String? ?? ""])
-                      .where((e) => e.isNotEmpty)
-                      .map((e) => e.substringSafe(0, 100))
-                      .map((name) => ArgChoiceBuilder(name, name))
+                      .sorted((a, b) => a.name.compareTo(b.name))
+                      .where((e) => e.name.isNotEmpty)
+                      .map((e) => ArgChoiceBuilder(e.name.substringSafe(0, 100), e.productId.toString()))
+                      .prependedBy([
+                        if (p0.focusedOption.value != null && (p0.focusedOption.value as String).isNotEmpty)
+                          ArgChoiceBuilder(p0.focusedOption.value as String, p0.focusedOption.value as String)
+                      ])
                       .toList()
                       .subListSafe(0, 25),
                 ),
@@ -94,13 +93,22 @@ class TcgPlayerSearchCommand extends CommandOptionBuilder {
 
     int groupId = int.parse(context.getArg(_groupFilterArg).value as String);
     String searchString = context.getArg(_nameArg).value as String;
-    RegExp searchRegex = RegExp(searchString, caseSensitive: false);
+    int? productId = int.tryParse(searchString);
+    RegExp searchRegex = RegExp(RegExp.escape(searchString), caseSensitive: false);
 
-    List<ProductModel> products = (await tcgPlayerService.searchProducts(
-      groupId: groupId,
-      anyName: searchRegex,
-    ))
-        .sorted((a, b) => -1 * a.group.publishedOn.compareTo(b.group.publishedOn));
+    List<ProductModel> products;
+
+    if (productId != null) {
+      products = (await tcgPlayerService.searchProducts(
+        groupId: groupId,
+        productId: productId,
+      ));
+    } else {
+      products = (await tcgPlayerService.searchProducts(
+        groupId: groupId,
+        anyName: searchRegex,
+      ));
+    }
 
     Map<int, SkuPriceCache> skuPriceCacheById = await tcgPlayerService.searchSkuPriceCachesBySkuIds(
       skuIds: products.expand((product) => product.skus.map((sku) => sku.skuId)).toList(),

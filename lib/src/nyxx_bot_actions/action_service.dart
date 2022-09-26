@@ -55,7 +55,7 @@ abstract class ActionService<A extends Action> {
     shutdownAction(action);
 
     //Update Persisted Storage
-    if (action != null) await _repository.upsert(objects: [action], ids: [action.getId()]);
+    if (action != null) await _repository.delete({action.getId()});
     return action;
   }
 

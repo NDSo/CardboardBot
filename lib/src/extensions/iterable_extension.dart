@@ -1,4 +1,5 @@
 import 'package:collection/collection.dart';
+import 'dart:math' as math;
 
 typedef NullFunction<T> = T Function();
 
@@ -81,11 +82,11 @@ extension IterableNum on Iterable<num> {
 
   num? min() {
     if (length == 0) return null;
-    return reduce((value, element) => value.compareTo(element));
+    return reduce((value, element) => math.min(value, element));
   }
 
   num? max() {
     if (length == 0) return null;
-    return reduce((value, element) => -1 * value.compareTo(element));
+    return reduce((value, element) => math.max(value, element));
   }
 }

@@ -1,5 +1,5 @@
 # Specify the Dart SDK base image version using dart:<version> (ex: dart:2.12)
-FROM dart:stable AS heavy_base_image
+FROM dart:2.19.6 AS heavy_base_image
 
 # Resolve app dependencies.
 WORKDIR /cardboard_bot

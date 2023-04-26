@@ -49,29 +49,6 @@ metadata:
       fieldsV1:
         'f:metadata':
           'f:annotations':
-            'f:gcb-build-id': {}
-            'f:kubectl.kubernetes.io/last-applied-configuration': {}
-          'f:labels':
-            'f:app.kubernetes.io/version': {}
-        'f:spec':
-          'f:template':
-            'f:metadata':
-              'f:annotations':
-                'f:gcb-build-id': {}
-              'f:labels':
-                'f:app.kubernetes.io/version': {}
-            'f:spec':
-              'f:containers':
-                'k:{"name":"cardboardbot-sha256-1"}':
-                  'f:image': {}
-      manager: kubectl-client-side-apply
-      operation: Update
-      time: '2023-04-26T16:20:01Z'
-    - apiVersion: apps/v1
-      fieldsType: FieldsV1
-      fieldsV1:
-        'f:metadata':
-          'f:annotations':
             .: {}
             'f:deployment.kubernetes.io/revision': {}
         'f:status':
@@ -100,7 +77,37 @@ metadata:
       manager: kube-controller-manager
       operation: Update
       subresource: status
-      time: '2023-04-26T16:21:35Z'
+      time: '2023-04-26T19:04:38Z'
+    - apiVersion: apps/v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        'f:metadata':
+          'f:annotations':
+            'f:gcb-build-id': {}
+            'f:gcb-trigger-id': {}
+            'f:kubectl.kubernetes.io/last-applied-configuration': {}
+          'f:labels':
+            'f:app.kubernetes.io/managed-by': {}
+            'f:app.kubernetes.io/name': {}
+            'f:app.kubernetes.io/version': {}
+        'f:spec':
+          'f:template':
+            'f:metadata':
+              'f:annotations':
+                .: {}
+                'f:gcb-build-id': {}
+                'f:gcb-trigger-id': {}
+              'f:labels':
+                'f:app.kubernetes.io/managed-by': {}
+                'f:app.kubernetes.io/name': {}
+                'f:app.kubernetes.io/version': {}
+            'f:spec':
+              'f:containers':
+                'k:{"name":"cardboardbot-sha256-1"}':
+                  'f:image': {}
+      manager: kubectl-client-side-apply
+      operation: Update
+      time: '2023-04-26T19:04:38Z'
   name: cardboardbot
   namespace: default
 spec:
@@ -110,8 +117,8 @@ spec:
       app: cardboardbot
   strategy:
     rollingUpdate:
-      maxSurge: 25%
-      maxUnavailable: 25%
+      maxSurge: 0%
+      maxUnavailable: 100%
     type: RollingUpdate
   template:
     metadata:
@@ -119,7 +126,7 @@ spec:
         app: cardboardbot
     spec:
       containers:
-        - image: gcr.io/cardboardbot-f4c69/cardboardbot
+        - image: gcr.io/cardboardbot-f4c69/github.com/ndso/cardboardbot
           imagePullPolicy: IfNotPresent
           name: cardboardbot-sha256-1
 ---
@@ -129,6 +136,24 @@ metadata:
   labels:
     app: cardboardbot
   managedFields:
+    - apiVersion: autoscaling/v2
+      fieldsType: FieldsV1
+      fieldsV1:
+        'f:metadata':
+          'f:labels':
+            .: {}
+            'f:app': {}
+        'f:spec':
+          'f:maxReplicas': {}
+          'f:metrics': {}
+          'f:minReplicas': {}
+          'f:scaleTargetRef':
+            'f:apiVersion': {}
+            'f:kind': {}
+            'f:name': {}
+      manager: GoogleCloudConsole
+      operation: Update
+      time: '2023-04-26T18:54:13Z'
     - apiVersion: autoscaling/v2
       fieldsType: FieldsV1
       fieldsV1:
@@ -162,8 +187,8 @@ metadata:
       manager: vpa-recommender
       operation: Update
       subresource: status
-      time: '2023-04-26T16:01:36Z'
-  name: cardboardbot-hpa-lwpm
+      time: '2023-04-26T19:04:59Z'
+  name: cardboardbot-hpa-kckv
   namespace: default
 spec:
   maxReplicas: 1

@@ -1,0 +1,23 @@
+steps:
+  # build the container image
+  - name: "gcr.io/cloud-builders/docker"
+    args: ["build", "-t", "gcr.io/$PROJECT_ID/$IMAGE:$SHORT_SHA", "."]
+    # push container image
+  - name: "gcr.io/cloud-builders/docker"
+    args: ["push", "gcr.io/$PROJECT_ID/$IMAGE:$SHORT_SHA"]
+    # deploy container image to GKE
+  - name: "gcr.io/cloud-builders/gke-deploy"
+    args:
+      - run
+      - --filename=$KUBERNETES_RESOURCE_FILE
+      - --image=gcr.io/$PROJECT_ID/$IMAGE:$SHORT_SHA
+      - --location=$LOCATION
+      - --cluster=$CLUSTER
+options:
+  substitutionOption: ALLOW_LOOSE
+substitutions:
+  _PROJECT_ID: cardboardbot-f4c69
+  _IMAGE: cardboardbot
+  _KUBERNETES_RESOURCE_FILE: kubernetes/
+  _LOCATION: us-east1-d
+  _CLUSTER: cluster-east1d

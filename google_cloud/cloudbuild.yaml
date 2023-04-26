@@ -15,3 +15,8 @@ steps:
       - --cluster=$GKE_CLUSTER
 options:
   substitutionOption: ALLOW_LOOSE
+  substitutions:
+    _MY_IMAGE_NAME: cardboardbot
+    _GKE_LOCATION: us-east1-d
+    _GKE_CLUSTER: cluster-east1d
+    _KUBERNETES_RESOURCE_FILE: kubernetes/

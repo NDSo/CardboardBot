@@ -119,7 +119,7 @@ spec:
         app: cardboardbot
     spec:
       containers:
-        - image: gcr.io/cardboardbot-f4c69/github.com/ndso/cardboardbot
+        - image: gcr.io/cardboardbot-f4c69/cardboardbot
           imagePullPolicy: IfNotPresent
           name: cardboardbot-sha256-1
 ---

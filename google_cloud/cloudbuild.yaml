@@ -11,13 +11,7 @@ steps:
       - run
       - --filename=$KUBERNETES_RESOURCE_FILE
       - --image=gcr.io/$PROJECT_ID/$IMAGE_NAME:$SHORT_SHA
-      - --location=$LOCATION
-      - --cluster=$CLUSTER
+      - --location=$GKE_LOCATION
+      - --cluster=$GKE_CLUSTER
 options:
   substitutionOption: ALLOW_LOOSE
-substitutions:
-  _PROJECT_ID: cardboardbot-f4c69
-  _IMAGE_NAME: cardboardbot
-  _KUBERNETES_RESOURCE_FILE: kubernetes/
-  _LOCATION: us-east1-d
-  _CLUSTER: cluster-east1d

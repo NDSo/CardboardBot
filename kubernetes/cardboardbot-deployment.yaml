@@ -116,9 +116,6 @@ spec:
     matchLabels:
       app: cardboardbot
   strategy:
-    rollingUpdate:
-      maxSurge: 0%
-      maxUnavailable: 100%
     type: Recreate
   template:
     metadata:

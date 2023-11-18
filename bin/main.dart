@@ -30,13 +30,7 @@ void main(List<String> arguments) async {
       var message = "[${rec.time}] [${rec.level.name}] [${rec.loggerName}] ${rec.message}";
       if (rec.error != null && (rec.error is Error || rec.error is Exception)) message += "\n${rec.error.toString()}";
       if (rec.stackTrace != null && (rec.level == Level.SEVERE || rec.level == Level.SHOUT)) message += "\n${rec.stackTrace?.toString()}";
-
-      if (rec.level >= Level.SEVERE) {
-        stderr.writeln(message);
-      } else {
-        print(message);
-      }
-
+      print(message);
     },
     onError: (e) => null,
   );
@@ -60,6 +54,21 @@ Future<void> initialize({String? googleCloudProjectId}) async {
   // Setup Infrastructure Cloud Api
   ///////////////
   if (googleCloudProjectId != null) {
+    Logger.root.clearListeners();
+    Logger.root.onRecord.listen(
+      (LogRecord rec) {
+        var message = {
+          "timestamp": rec.time.toUtc().toIso8601String(),
+          "severity": rec.level.toCloudLogSeverity(),
+          "message": "[${rec.loggerName}] ${rec.message}",
+          if (rec.error != null) "error": rec.error.toString(),
+          if (rec.stackTrace != null) "stackTrace": rec.stackTrace.toString(),
+        };
+        print(jsonEncode(message));
+      },
+      onError: (e) => null,
+    );
+
     // Initialize cloud clients
     var googleCloudApis = await GoogleCloudInitializer.initialize(projectId: googleCloudProjectId);
 
@@ -193,4 +202,16 @@ Future<void> initialize({String? googleCloudProjectId}) async {
   // Sync Interactions
   ///////////////////////
   await interactions.sync();
+}
+
+extension _LogLevelExtension on Level {
+  String toCloudLogSeverity() {
+    if (this == Level.FINEST || this == Level.FINER || this == Level.FINE) return "DEBUG";
+    if (this == Level.CONFIG) return "NOTICE";
+    if (this == Level.INFO) return "INFO";
+    if (this == Level.WARNING) return "WARNING";
+    if (this == Level.SEVERE) return "ERROR";
+    if (this == Level.SHOUT) return "ALERT";
+    return "DEFAULT";
+  }
 }

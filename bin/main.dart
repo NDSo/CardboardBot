@@ -27,9 +27,16 @@ void main(List<String> arguments) async {
   final Logger logger = Logger("main");
   Logger.root.onRecord.listen(
     (LogRecord rec) {
-      print("[${rec.time}] [${rec.level.name}] [${rec.loggerName}] ${rec.message}");
-      if (rec.error != null && (rec.error is Error || rec.error is Exception)) print("${rec.error.toString()}");
-      if (rec.stackTrace != null && (rec.level == Level.SEVERE || rec.level == Level.SHOUT)) print("${rec.stackTrace?.toString()}");
+      var message = "[${rec.time}] [${rec.level.name}] [${rec.loggerName}] ${rec.message}";
+      if (rec.error != null && (rec.error is Error || rec.error is Exception)) message += "\n${rec.error.toString()}";
+      if (rec.stackTrace != null && (rec.level == Level.SEVERE || rec.level == Level.SHOUT)) message += "\n${rec.stackTrace?.toString()}";
+
+      if (rec.level >= Level.SEVERE) {
+        stderr.writeln(message);
+      } else {
+        print(message);
+      }
+
     },
     onError: (e) => null,
   );
@@ -185,5 +192,5 @@ Future<void> initialize({String? googleCloudProjectId}) async {
   ///////////////////////
   // Sync Interactions
   ///////////////////////
-  interactions.sync();
+  await interactions.sync();
 }
